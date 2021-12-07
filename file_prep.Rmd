@@ -1,0 +1,269 @@
+---
+title: "file preparation"
+output: html_document
+---
+
+## Directories
+
+```{r }
+
+if ((Sys.info()["nodename"]) == "COP026") {
+  dir_data <- "C:/Users/arvor_d/Documents/workwork/data"
+  dir_plot <- "C:/Users/arvor_d/Documents/workwork/plot"
+} else if ((Sys.info()["nodename"]) == "COSTELSV6") {
+  dir_data <- "F:/kamir_e/$data"
+  dir_plot <- "F:/kamir_e/$plot "
+}
+
+```
+
+## Library
+
+```{r }
+
+library(plyr)
+library(tidyverse)
+library(tidyr)
+library(dplyr)
+library(foreach)
+library(iterators)
+library(lwgeom)
+library(parallel)
+library(doParallel)
+library(maps)
+library(nnet)
+library(ggplot2)
+library(latticeExtra)
+library(sp)
+library(rgdal)
+library(raster)
+library(stringi)
+library(ggmap)
+library(sf)
+library(stars)
+library(terra)
+
+```
+
+
+## Mapbiomas cropping
+
+```{r }
+
+hydrobasin <- st_read(file.path(dir_data, "hydroshed","hydrobasins_level9","hydrobasin_mg_lev9.shp"))
+
+for (i in 1:3389){
+  extractBasin(i, hydrobasin[i,])
+}
+
+hydrobasin[i,]$HYBAS_ID
+```
+
+## MAPBIOMAS cropping
+
+```{r }
+
+# Mapbiomas raster for whole MT
+mapbiomas_full <- rast(file.path(dir_data, "mapbiomas", "biomas1985_2019_mg.tif"))
+
+# Hydroshed hydrobasins at level 9
+hydrobasin <- st_read(file.path(dir_data, "hydroshed","hydrobasins_level9","hydrobasin_mg_lev9.shp"))
+
+# Cropping
+for (i in 1:3389){
+  
+  mapbiomas_crop <- terra::crop(mapbiomas_full,hydrobasin[i,])
+  mapbiomas_mask <- terra::mask(mapbiomas_crop,vect(hydrobasin[i,]))
+
+  WD.tmp = list.files(path=dir_data, pattern = paste0("Basin_",i,"_"), full.names = TRUE)
+
+  terra::writeRaster(mapbiomas_mask, file.path(WD.tmp, paste0("mapbiomas_", i, ".tif")), overwrite = TRUE)
+
+}
+
+```
+
+## MODIS cropping
+
+```{r }
+
+# MODIS raster for whole MT
+modis_full <- rast(file.path(dir_data, "pangaea", "panga_braz84_mt.tif"))
+
+# Hydroshed hydrobasins at level 9
+hydrobasin <- st_read(file.path(dir_data, "hydroshed","hydrobasins_level9","hydrobasin_mg_lev9.shp"))
+
+
+# Cropping
+for (i in 1:3389){
+  
+  modis_crop <- terra::crop(modis_full,hydrobasin[i,])
+  modis_mask <- terra::mask(modis_crop,vect(hydrobasin[i,]))
+
+  WD.tmp = list.files(path=dir_data, pattern = paste0("Basin_",i,"_"), full.names = TRUE)
+
+  terra::writeRaster(modis_mask, file.path(WD.tmp, paste0("modis_", i, ".tif")), overwrite = TRUE)
+
+}
+
+```
+
+## Water surfaces cropping
+
+1. SIMPLE RIOS 
+
+```{r }
+
+# MODIS raster for whole MT
+hydronetwork <- st_read(file.path(dir_data, "water_surface", "rios_simples", "rios_simple84.shp"))
+
+# Hydroshed hydrobasins at level 9
+hydrobasin <- st_read(file.path(dir_data, "hydroshed","hydrobasins_level9","hydrobasin_mg_lev9.shp"))
+
+
+tictoc::tic()
+  no_cores <- detectCores()
+  cl <- makeCluster(no_cores) # setting up number of cores
+  registerDoParallel(cl) # parallelizing on them
+  
+  foreach(i=c(1:3389), .packages=c('sf')) %dopar%  { #
+    
+    WD.tmp = list.files(path=dir_data, pattern = paste0("Basin_",i,"_"), full.names = TRUE)
+    
+    crop_list <- st_intersects(hydrobasin[i,],hydronetwork)
+    crop_shp <- hydronetwork[unlist(crop_list),]
+    
+    st_write(crop_shp, file.path(WD.tmp, paste0("riossimple_",i,".shp")), delete_layer = TRUE)
+  
+   }
+  
+  stopCluster(cl)
+tictoc::toc() 
+
+
+```
+
+
+## Water surfaces cropping
+
+2. POLY RIOS 
+
+```{r }
+
+# MODIS raster for whole MT
+polynetwork <- st_read(file.path(dir_data, "water_surface", "rios_poly", "output_hidro_poly.shp"))
+
+# Hydroshed hydrobasins at level 9
+hydrobasin <- st_read(file.path(dir_data, "hydroshed","hydrobasins_level9","hydrobasin_mg_lev9.shp"))
+
+
+tictoc::tic()
+  no_cores <- detectCores()
+  cl <- makeCluster(no_cores) # setting up number of cores
+  registerDoParallel(cl) # parallelizing on them
+  
+  foreach(i=c(1:3389), .packages=c('sf')) %dopar%  { #
+    
+    WD.tmp = list.files(path=dir_data, pattern = paste0("Basin_",i,"_"), full.names = TRUE)
+    
+    if(polynetwork[i,]!=0){
+      
+      crop_list <- st_intersects(hydrobasin[i,],polynetwork)
+      crop_shp <- hydronetwork[unlist(crop_list),]
+    
+      st_write(crop_shp, file.path(WD.tmp, paste0("riospoly_",i,".shp")), delete_layer = TRUE)
+
+    }
+  
+   }
+  
+  stopCluster(cl)
+tictoc::toc() 
+
+
+```
+
+
+## Water surfaces cropping
+
+3. NASCENTES
+
+```{r }
+
+# MODIS raster for whole MT
+nascente <- st_read(file.path(dir_data, "water_surface", "nascentes", "nascente84.shp"))
+
+# Hydroshed hydrobasins at level 9
+hydrobasin <- st_read(file.path(dir_data, "hydroshed","hydrobasins_level9","hydrobasin_mg_lev9.shp"))
+
+
+tictoc::tic()
+  no_cores <- detectCores()
+  cl <- makeCluster(no_cores) # setting up number of cores
+  registerDoParallel(cl) # parallelizing on them
+  
+  foreach(i=c(1:3389), .packages=c('sf')) %dopar%  { #
+    
+    WD.tmp = list.files(path=dir_data, pattern = paste0("Basin_",i,"_"), full.names = TRUE)
+    
+    if(polynetwork[i,]!=0){
+      
+      crop_list <- st_intersects(hydrobasin[i,],nascente)
+      crop_shp <- hydronetwork[unlist(crop_list),]
+    
+      st_write(crop_shp, file.path(WD.tmp, paste0("nascente_",i,".shp")), delete_layer = TRUE)
+
+    }
+  
+   }
+  
+  stopCluster(cl)
+tictoc::toc() 
+
+
+```
+
+## Water surfaces cropping
+
+4. RESERVATORIOS
+
+```{r }
+
+# MODIS raster for whole MT
+reserv <- st_read(file.path(dir_data, "water_surface", "lago", "input_lago_reservatorio_icv.shp"))
+
+# Hydroshed hydrobasins at level 9
+hydrobasin <- st_read(file.path(dir_data, "hydroshed","hydrobasins_level9","hydrobasin_mg_lev9.shp"))
+
+
+tictoc::tic()
+  no_cores <- detectCores()
+  cl <- makeCluster(no_cores) # setting up number of cores
+  registerDoParallel(cl) # parallelizing on them
+  
+  foreach(i=c(1:3389), .packages=c('sf')) %dopar%  { #
+    
+    WD.tmp = list.files(path=dir_data, pattern = paste0("Basin_",i,"_"), full.names = TRUE)
+    
+    if(polynetwork[i,]!=0){
+      
+      crop_list <- st_intersects(hydrobasin[i,],reserv)
+      crop_shp <- hydronetwork[unlist(crop_list),]
+    
+      st_write(crop_shp, file.path(WD.tmp, paste0("reserv_",i,".shp")), delete_layer = TRUE)
+
+    }
+  
+   }
+  
+  stopCluster(cl)
+tictoc::toc() 
+
+
+```
+
+
+
+
+
+

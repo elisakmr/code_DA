@@ -1,0 +1,86 @@
+---
+title: "function"
+output: html_document
+---
+
+## Directories
+
+```{r }
+
+if ((Sys.info()["nodename"]) == "COP026") {
+  dir_data <- "C:/Users/arvor_d/Documents/workwork/data"
+  dir_plot <- "C:/Users/arvor_d/Documents/workwork/plot"
+} else if ((Sys.info()["nodename"]) == "COSTELSV6") {
+  dir_data <- "F:/kamir_e/$data"
+  dir_plot <- "F:/kamir_e/$plot "
+}
+
+```
+
+## Library
+
+```{r }
+
+library(plyr)
+library(tidyverse)
+library(tidyr)
+library(dplyr)
+library(foreach)
+library(iterators)
+library(lwgeom)
+library(parallel)
+library(doParallel)
+library(maps)
+library(nnet)
+library(ggplot2)
+library(latticeExtra)
+library(sp)
+library(rgdal)
+library(raster)
+library(stringi)
+library(ggmap)
+library(sf)
+library(stars)
+library(terra)
+
+```
+
+## Function setting file organization
+
+```{r }
+
+extractBasin = function(i,basin.sf){
+
+
+  ID.name = paste0("Basin_",i,"_",basin.sf$HYBAS_ID)
+  #check if directory exist
+  if (!file.exists(ID.name)){
+    dir.create(file.path(dir_data, ID.name))
+    WD.new = paste(dir_data, ID.name,sep="/")
+  }
+  
+
+}
+
+```
+
+## Function computing metrics per basin
+
+```{r }
+
+
+
+
+
+
+
+
+```
+
+
+
+
+
+
+
+
