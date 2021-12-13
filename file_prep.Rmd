@@ -46,7 +46,7 @@ library(terra)
 ```
 
 
-## Mapbiomas cropping
+## Setting up basin files
 
 ```{r }
 
@@ -56,7 +56,6 @@ for (i in 1:3389){
   extractBasin(i, hydrobasin[i,])
 }
 
-hydrobasin[i,]$HYBAS_ID
 ```
 
 ## MAPBIOMAS cropping
@@ -70,16 +69,26 @@ mapbiomas_full <- rast(file.path(dir_data, "mapbiomas", "biomas1985_2019_mg.tif"
 hydrobasin <- st_read(file.path(dir_data, "hydroshed","hydrobasins_level9","hydrobasin_mg_lev9.shp"))
 
 # Cropping
+tictoc::tic()
+
+  no_cores <- detectCores()
+  cl <- makeCluster(no_cores) # setting up number of cores
+  registerDoParallel(cl) # parallelizing on them
+  
 for (i in 1:3389){
   
   mapbiomas_crop <- terra::crop(mapbiomas_full,hydrobasin[i,])
   mapbiomas_mask <- terra::mask(mapbiomas_crop,vect(hydrobasin[i,]))
+  mapbiomas_mask.utm = terra::project(rast(mapbiomas_mask),"+init=epsg:32721",method="ngb")
 
   WD.tmp = list.files(path=dir_data, pattern = paste0("Basin_",i,"_"), full.names = TRUE)
 
   terra::writeRaster(mapbiomas_mask, file.path(WD.tmp, paste0("mapbiomas_", i, ".tif")), overwrite = TRUE)
 
-}
+  }
+
+tictoc::toc() 
+
 
 ```
 
@@ -169,7 +178,7 @@ tictoc::tic()
     if(polynetwork[i,]!=0){
       
       crop_list <- st_intersects(hydrobasin[i,],polynetwork)
-      crop_shp <- hydronetwork[unlist(crop_list),]
+      crop_shp <- polynetwork[unlist(crop_list),]
     
       st_write(crop_shp, file.path(WD.tmp, paste0("riospoly_",i,".shp")), delete_layer = TRUE)
 
@@ -205,15 +214,13 @@ tictoc::tic()
   foreach(i=c(1:3389), .packages=c('sf')) %dopar%  { #
     
     WD.tmp = list.files(path=dir_data, pattern = paste0("Basin_",i,"_"), full.names = TRUE)
-    
-    if(polynetwork[i,]!=0){
+
       
       crop_list <- st_intersects(hydrobasin[i,],nascente)
-      crop_shp <- hydronetwork[unlist(crop_list),]
+      crop_shp <- nascente[unlist(crop_list),]
     
       st_write(crop_shp, file.path(WD.tmp, paste0("nascente_",i,".shp")), delete_layer = TRUE)
 
-    }
   
    }
   
@@ -244,15 +251,13 @@ tictoc::tic()
   foreach(i=c(1:3389), .packages=c('sf')) %dopar%  { #
     
     WD.tmp = list.files(path=dir_data, pattern = paste0("Basin_",i,"_"), full.names = TRUE)
-    
-    if(polynetwork[i,]!=0){
       
       crop_list <- st_intersects(hydrobasin[i,],reserv)
-      crop_shp <- hydronetwork[unlist(crop_list),]
+      crop_shp <- reserv[unlist(crop_list),]
     
       st_write(crop_shp, file.path(WD.tmp, paste0("reserv_",i,".shp")), delete_layer = TRUE)
 
-    }
+    
   
    }
   

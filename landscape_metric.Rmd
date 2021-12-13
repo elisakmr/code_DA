@@ -1,0 +1,91 @@
+---
+title: "Landscape metrics"
+output: html_document
+---
+
+## Directories
+
+```{r }
+
+if ((Sys.info()["nodename"]) == "COP026") {
+  dir_data <- "C:/Users/arvor_d/Documents/workwork/data"
+  dir_plot <- "C:/Users/arvor_d/Documents/workwork/plot"
+} else if ((Sys.info()["nodename"]) == "COSTELSV6") {
+  dir_data <- "F:/kamir_e/$data"
+  dir_plot <- "F:/kamir_e/$plot "
+}
+
+```
+
+## Library
+
+```{r }
+
+library(plyr)
+library(tidyverse)
+library(tidyr)
+library(dplyr)
+library(foreach)
+library(parallel)
+library(doParallel)
+library(maps)
+library(landscapemetrics)
+library(sp)
+library(rgdal)
+library(raster)
+library(sf)
+library(terra)
+
+```
+
+## Parameters
+
+```{r }
+
+year <- 2019
+time_span <- c(1985:2019)
+y <- which(year==time_span)
+
+```
+
+## Computing metrics on for loop
+
+```{r }
+
+tictoc::tic()
+
+  no_cores <- detectCores()
+  cl <- makeCluster(no_cores) # setting up number of cores
+  registerDoParallel(cl) # parallelizing on them
+  
+  foreach(i=c(1:1700), .packages=c('landscapemetrics', 'terra', 'raster')) %dopar%  { 
+
+
+  # directory
+  WD.tmp = list.files(path=dir_data, pattern = paste0("Basin_",i,"_"), full.names = TRUE)
+  
+  # loading landuse data
+  mapbiomas_crop <- rast(file.path(WD.tmp, paste0("mapbiomas_",i, ".tif")))
+  
+  #computing landscape metrics at basin scale (MapBiomas)
+  mapbiomas.basin.lsm = calculate_lsm(raster(mapbiomas_crop[[y]]),level="class",metric = c("ca","pland","np"),directions =8)
+  
+  mapbiomas.basin.df = as.data.frame(mapbiomas.basin.lsm)
+  
+  mapbiomas.basin.df$ID = i
+  
+  save(mapbiomas.basin.df, file = file.path(WD.tmp, paste0(year, "_mapbiomas_lsm",i,".RData")))
+
+}
+
+  stopCluster(cl)
+tictoc::toc()
+
+
+
+```
+
+
+
+
+
