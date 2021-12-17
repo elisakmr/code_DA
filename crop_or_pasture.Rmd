@@ -1,0 +1,90 @@
+---
+title: "Crop or pasture"
+output: html_document
+---
+
+```{r }
+
+if ((Sys.info()["nodename"]) == "COP026") {
+  dir_data <- "C:/Users/arvor_d/Documents/workwork/data"
+  dir_plot <- "C:/Users/arvor_d/Documents/workwork/plot"
+} else if ((Sys.info()["nodename"]) == "COSTELSV6") {
+  dir_data <- "F:/kamir_e/$data"
+  dir_plot <- "F:/kamir_e/$plot "
+}
+
+```
+
+## Library
+
+```{r }
+
+library(plyr)
+library(tidyverse)
+library(tidyr)
+library(dplyr)
+library(maps)
+library(ggplot2)
+library(sp)
+library(rgdal)
+library(raster)
+library(ggmap)
+library(sf)
+library(viridis)
+
+```
+
+## PARAMETERS
+
+```{r }
+
+# foret = 3, savanna = 4, pasture = 15, soybean = 39, other temp.crops = 41, per.crops = 36
+
+year = 2019
+
+
+```
+
+## LOADING & MERGING files
+
+
+```{r }
+
+list_lsm <- list()
+
+for (i in 1:1032){
+
+    WD.tmp = list.files(path=dir_data, pattern = paste0("Basin_",i,"_"), full.names = TRUE)
+
+    list_lsm[[i]] <- get(load(file=file.path(WD.tmp, paste0(year, "_mapbiomas_lsm",i,".RData")))) 
+    
+ 
+}
+
+df_lsm <- do.call("rbind",list_lsm) %>% filter(metric=='pland', class == 15|class == 41) %>% dplyr::select(metric, ID, class, value)  %>% spread(class, value) %>% drop_na() %>% dplyr::rename(pasture='15', tcrop='41')
+
+df_lsm
+```
+
+## PLOTTING
+
+
+```{r }
+
+
+ggplot(df_lsm) + 
+  geom_point(aes(x=pasture,y=tcrop), show.legend = FALSE, alpha=0.2) +
+  scale_y_continuous(limits = c(0,10))+ 
+  labs(title = paste0(" % ", lu.name," per hydrobasin ", year), x="pasture", y="tcrop")+ 
+  theme_bw()+
+  theme(axis.text.x = element_text(size = 12), axis.title.x = element_text(size = 10, vjust = 1.5, hjust=1),
+        axis.text.y = element_text(size = 12), axis.title.y = element_text(size = 10, angle = 0, vjust=1.05),
+        plot.title = element_text(size = 10, face = "bold", hjust=0.5))
+
+
+
+
+
+```
+
+

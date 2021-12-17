@@ -1,0 +1,103 @@
+---
+title: "Boxplot RV land use for each basin"
+output: html_document
+---
+
+```{r }
+
+if ((Sys.info()["nodename"]) == "COP026") {
+  dir_data <- "C:/Users/arvor_d/Documents/workwork/data"
+  dir_plot <- "C:/Users/arvor_d/Documents/workwork/plot"
+} else if ((Sys.info()["nodename"]) == "COSTELSV6") {
+  dir_data <- "F:/kamir_e/$data"
+  dir_plot <- "F:/kamir_e/$plot"
+}
+
+```
+
+## Library
+
+```{r }
+
+library(plyr)
+library(tidyverse)
+library(tidyr)
+library(dplyr)
+library(maps)
+library(ggplot2)
+library(sp)
+library(rgdal)
+library(raster)
+library(ggmap)
+library(sf)
+library(viridis)
+
+```
+
+## PARAMETERS
+
+```{r }
+
+# foret = 3, savanna = 4, pasture = 15, soybean = 39, other temp.crops = 41, per.crops = 36
+
+year=2019
+lu.code = 41
+lu.name = "tempcrop"
+tampon=100
+
+
+```
+
+## LOADING & MERGING files
+
+
+```{r }
+
+# basins
+hydrobasin <- st_read(file.path(dir_data, "hydroshed", "subbas_3bas.shp"))
+
+# landscape metrics
+list_rv <- list()
+
+for (i in 1:2031){
+
+    WD.tmp = list.files(path=dir_data, pattern = paste0("Basin_",i,"_"), full.names = TRUE)
+
+    basin.name <- hydrobasin[i,]$basin
+    
+    list_rv[[i]] <- get(load(file=file.path(WD.tmp, paste0(year, "_mapbiomas_lsm_buf",tampon, "_",i,".RData")))) 
+    
+    if(list_rv[[i]]=="nonascente"){
+    list_rv[[i]] <- NA}
+
+    else {list_rv[[i]] <- list_rv[[i]] %>% mutate(basin=basin.name) }
+
+}
+
+# merging all
+df_lsm_rv <- do.call("rbind",list_rv) %>% dplyr::select(metric, class, basin, ID, value) %>% filter(metric=='pland', class == lu.code) %>% drop_na()
+
+dim(df_lsm_rv)
+
+```
+
+## BOXPLOTTING
+
+We compute boxplots of % of lost forest, for the two main agriculture types: pasture or crops
+
+```{r }
+
+
+ggplot(df_lsm_rv) + 
+  geom_boxplot(aes(x=factor(basin),y=value, group=basin, fill=factor(basin)), show.legend = FALSE, alpha=0.2) +
+  coord_cartesian(ylim = quantile(df_lsm_rv$value, c(0, 0.9)))+
+  labs(title = paste0(" % ", lu.name," per sub-basin riparian area (",tampon,"m) in ", year), x="", y="")+ 
+  theme_bw()+
+  theme(axis.text.x = element_text(size = 12), axis.title.x = element_text(size = 10, vjust = 1.5, hjust=1),
+        axis.text.y = element_text(size = 12), axis.title.y = element_text(size = 10, angle = 0, vjust=1.05),
+        plot.title = element_text(size = 10, face = "bold", hjust=0.5))
+
+
+ggsave(file.path(dir_plot, paste0(year, lu.name,tampon,"_rv_basin.boxplot.pdf")), dpi = 300)
+
+```

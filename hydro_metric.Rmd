@@ -1,0 +1,88 @@
+---
+title: "hydro_metric"
+output: html_document
+---
+
+## Directories
+
+```{r }
+
+if ((Sys.info()["nodename"]) == "COP026") {
+  dir_data <- "C:/Users/arvor_d/Documents/workwork/data"
+  dir_plot <- "C:/Users/arvor_d/Documents/workwork/plot"
+} else if ((Sys.info()["nodename"]) == "COSTELSV6") {
+  dir_data <- "F:/kamir_e/$data"
+  dir_plot <- "F:/kamir_e/$plot "
+}
+
+```
+
+## Library
+
+```{r }
+
+library(plyr)
+library(tidyverse)
+library(tidyr)
+library(dplyr)
+library(foreach)
+library(parallel)
+library(doParallel)
+library(maps)
+library(landscapemetrics)
+library(sp)
+library(rgdal)
+library(raster)
+library(sf)
+library(terra)
+
+```
+
+## Function
+
+```{r }
+
+# loading hydrobasin
+hydrobasin <- st_read(file.path(dir_data, "hydroshed", "subbas_3bas.shp"))
+
+tictoc::tic()
+
+  no_cores <- detectCores()
+  cl <- makeCluster(no_cores/2) # setting up number of cores
+  registerDoParallel(cl) # parallelizing on them
+  
+  foreach(i=c(1:2031), .packages=c('sf', 'terra', 'raster')) %dopar%  { 
+
+    # directory
+    WD.tmp = list.files(path=dir_data, pattern = paste0("Basin_",i,"_"), full.names = TRUE)
+    
+
+    # loading hydrologic data
+    nascente <- st_read(file.path(WD.tmp, paste0("nascente_",i,".shp")))
+    reserv <- st_read(file.path(WD.tmp, paste0("reserv_",i,".shp")))
+    rios.simple <- st_read(file.path(WD.tmp, paste0("riossimple_",i,".shp")))
+    poly.id=i
+    surface <- st_area(hydrobasin[i,])
+      
+    d.nascente <- as.numeric(dim(nascente)[1]/surface)
+    d.reserv <- as.numeric(dim(reserv)[1]/surface)
+    d.rios <- as.numeric(sum(st_length(rios.simple))/surface)
+    
+    df <- data.frame(poly.id, d.nascente, d.reserv, d.rios)
+    
+    save(df, file = file.path(WD.tmp, paste0("hydrometric_",i,".RData")))
+
+  }
+
+
+```
+
+
+
+
+
+
+
+
+
+

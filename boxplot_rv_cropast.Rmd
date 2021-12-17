@@ -1,0 +1,139 @@
+---
+title: "Boxplot Riparian land use"
+output: html_document
+---
+
+```{r }
+
+if ((Sys.info()["nodename"]) == "COP026") {
+  dir_data <- "C:/Users/arvor_d/Documents/workwork/data"
+  dir_plot <- "C:/Users/arvor_d/Documents/workwork/plot"
+} else if ((Sys.info()["nodename"]) == "COSTELSV6") {
+  dir_data <- "F:/kamir_e/$data"
+  dir_plot <- "F:/kamir_e/$plot "
+}
+
+```
+
+## Library
+
+```{r }
+
+library(plyr)
+library(tidyverse)
+library(tidyr)
+library(dplyr)
+library(maps)
+library(ggplot2)
+library(sp)
+library(rgdal)
+library(raster)
+library(ggmap)
+library(sf)
+library(viridis)
+
+```
+
+## PARAMETERS
+
+```{r }
+
+# foret = 3, savanna = 4, pasture = 15, soybean = 39, other temp.crops = 41, per.crops = 36
+
+year=2019
+lu.code = 3
+lu.name = "foret"
+tampon = 100
+
+```
+
+## LOADING & MERGING files
+
+
+```{r }
+
+list_lsm <- list()
+list_buf <- list()
+
+for (i in 1:1032){
+
+    WD.tmp = list.files(path=dir_data, pattern = paste0("Basin_",i,"_"), full.names = TRUE)
+    
+    list_buf[[i]] <- get(load(file=file.path(WD.tmp, paste0(year, "_mapbiomas_lsm_buf",tampon, "_",i,".RData")))) 
+    
+    if(list_buf[[i]]=="nonascente"){
+      list_buf[[i]] <- NA
+      list_lsm[[i]] <- NA
+    }
+    
+    else {list_lsm[[i]] <- get(load(file=file.path(WD.tmp, paste0(year, "_mapbiomas_lsm",i,".RData")))) %>% mutate(annee=year)
+    list_buf[[i]] %>% mutate(annee=year) }
+    
+    
+
+}
+
+df_lsm <- do.call("rbind",list_lsm)
+df_buf <- do.call("rbind",list_buf)
+dim(df_buf)
+dim(df_lsm)
+
+```
+
+## BUILDING table of values of deforestation
+
+We compute % of lost forest, for the two main agriculture types: pasture or crops
+
+```{r }
+
+list_forest <- list()
+
+j=0
+
+for (i in 1:1032){
+  
+  perc_past <- (df_lsm %>% filter(ID==i, class==15, metric=='pland'))$value
+  perc_crop <- (df_lsm %>% filter(ID==i, class==41, metric=='pland'))$value ### attention !!
+  
+  if(is_empty(perc_past)){perc_past=0}
+  if(is_empty(perc_crop)){perc_crop=0}
+  
+  if(perc_past>=20){
+    j=j+1
+    list_forest[[j]] <- df_buf %>% filter(ID==i, class == 3|class == 4, metric=='pland') %>% mutate(maj='past')
+    }
+  
+  if(perc_crop>=20){
+    j=j+1
+    list_forest[[j]] <- df_buf %>% filter(ID==i, class == 3|class == 4, metric=='pland') %>% mutate(maj='crop')
+  }
+  
+}
+
+
+df_forest <- do.call("rbind",list_forest) %>% mutate(annee=year)
+
+dim(df_forest)
+
+```
+
+## BOXPLOTTING
+
+We compute boxplots of % of lost forest, for the two main agriculture types: pasture or crops
+
+```{r }
+
+
+ggplot(df_forest) + 
+  geom_boxplot(aes(x=factor(maj),y=value, group=maj, fill=factor(maj)), show.legend = FALSE, alpha=0.2) +
+  scale_y_continuous()+
+  labs(title = paste0(" % ", lu.name," per hydrobasin RV ", tampon, "m in ", year), x="", y="%")+ 
+  theme_bw()+
+  theme(axis.text.x = element_text(size = 12), axis.title.x = element_text(size = 10, vjust = 1.5, hjust=1),
+        axis.text.y = element_text(size = 12), axis.title.y = element_text(size = 10, angle = 0, vjust=1.05),
+        plot.title = element_text(size = 10, face = "bold", hjust=0.5))
+
+ggsave(file.path(dir_plot, paste0(year, lu.name, tampon,".buf.boxplot.pdf")), dpi = 300)
+
+
+```

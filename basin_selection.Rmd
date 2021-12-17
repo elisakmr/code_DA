@@ -1,0 +1,109 @@
+---
+title: "Basin of interest"
+output: html_document
+---
+
+## Directories
+
+```{r }
+
+if ((Sys.info()["nodename"]) == "COP026") {
+  dir_data <- "C:/Users/arvor_d/Documents/workwork/data"
+  dir_plot <- "C:/Users/arvor_d/Documents/workwork/plot"
+} else if ((Sys.info()["nodename"]) == "COSTELSV6") {
+  dir_data <- "F:/kamir_e/$data"
+  dir_plot <- "F:/kamir_e/$plot "
+}
+
+```
+
+## Library
+
+```{r }
+
+library(plyr)
+library(tidyverse)
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+library(rgdal)
+library(raster)
+library(sf)
+library(stars)
+library(terra)
+
+```
+
+
+## Loading and reprojecting basin files
+
+```{r }
+
+# MT borders
+mt_borders <- st_read(file.path(dir_data, "boundaries", "mato grosso", "mt84.shp"))
+
+# Basins
+xingu.in <- st_read(file.path(dir_data, "hydroshed", "basin", "Subbacias_Xingu.shp"))
+juruenc.in <- st_read(file.path(dir_data, "hydroshed", "basin","Bacia_Juruena_dissolve.shp"))
+telespires.in <- st_read(file.path(dir_data, "hydroshed", "basin","TelesPires.shp"))
+sub_basin.in <- st_read(file.path(dir_data, "hydroshed", "basin","Sub_bacia.shp"))
+
+xingu.84 <- st_transform(xingu.in, crs="EPSG:4326") 
+juruenc.84 <- st_transform(juruenc.in, crs="EPSG:4326") 
+telespires.84 <- st_transform(telespires.in, crs="EPSG:4326") 
+sub_basin.84 <- st_transform(sub_basin.in, crs="EPSG:4326") 
+
+telespires.valid <- st_make_valid(telespires.84)
+juruenc.valid <- st_make_valid(juruenc.84)
+
+```
+
+## Computing exact Xingu basin shapefile
+
+Intersection between MT and Xingu from "sub_basin"
+
+```{r }
+
+xingu_shp <- st_intersection(sub_basin.84[13,],mt_borders)
+
+plot(xingu_shp$geometry)
+plot(mt_borders$geometry, add=TRUE)
+
+
+```
+
+## Selecting sub-basin of interest
+
+1. Intersection between hydrobasin from hydroshed and shapes of the basins selected
+
+```{r }
+
+hydrobasin <- st_read(file.path(dir_data, "hydroshed","hydrobasins_level9","hydrobasin_mg_lev9.shp"))
+
+# Xingu basin
+int.list <- st_intersects(xingu_shp, hydrobasin)
+hydrobas_xingu <- hydrobasin[unlist(int.list),] %>% mutate(basin='xingu')
+
+# Teles pires basin
+int.list <- st_intersects(telespires.valid, hydrobasin)
+hydrobas_telespires <- hydrobasin[unlist(int.list),] %>% mutate(basin='teles')
+
+# Juruenc basin
+int.list <- st_intersects(juruenc.valid, hydrobasin)
+hydrobas_juruenc <- hydrobasin[unlist(int.list),] %>% mutate(basin='juruenc')
+
+
+plot(hydrobas_xingu$geometry)
+plot(hydrobas_telespires$geometry, add=TRUE)
+plot(hydrobas_juruenc$geometry, add=TRUE)
+plot(mt_borders$geometry, add=TRUE)
+
+
+basin_interest <- rbind(hydrobas_xingu, hydrobas_telespires, hydrobas_juruenc)
+st_write(basin_interest, file.path(dir_data, "hydroshed", "subbas_3bas.shp"), delete_layer = TRUE)
+
+
+```
+
+
+

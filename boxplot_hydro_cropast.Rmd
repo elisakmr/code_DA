@@ -1,0 +1,125 @@
+---
+title: "Boxplot hydrologic metrics"
+output: html_document
+---
+
+```{r }
+
+if ((Sys.info()["nodename"]) == "COP026") {
+  dir_data <- "C:/Users/arvor_d/Documents/workwork/data"
+  dir_plot <- "C:/Users/arvor_d/Documents/workwork/plot"
+} else if ((Sys.info()["nodename"]) == "COSTELSV6") {
+  dir_data <- "F:/kamir_e/$data"
+  dir_plot <- "F:/kamir_e/$plot"
+}
+
+```
+
+## Library
+
+```{r }
+
+library(plyr)
+library(tidyverse)
+library(tidyr)
+library(dplyr)
+library(maps)
+library(ggplot2)
+library(sp)
+library(rgdal)
+library(raster)
+library(ggmap)
+library(sf)
+library(viridis)
+
+```
+
+## PARAMETERS
+
+```{r }
+
+# foret = 3, savanna = 4, pasture = 15, soybean = 39, other temp.crops = 41, per.crops = 36
+
+year = 2019
+
+
+```
+
+## LOADING & MERGING files
+
+
+```{r }
+
+list_hydro <- list()
+
+for (i in 1:2031){
+
+    WD.tmp = list.files(path=dir_data, pattern = paste0("Basin_",i,"_"), full.names = TRUE)
+
+    list_hydro[[i]] <- get(load(file=file.path(WD.tmp, paste0("hydrometric_",i,".RData"))))
+    
+    list_hydro[[i]]$maj <- NA
+    
+    df_lsm <- get(load(file=file.path(WD.tmp, paste0(year, "_mapbiomas_lsm",i,".RData")))) %>% mutate(annee=year)
+    
+    perc_past <- (df_lsm %>% filter(ID==i, class==15, metric=='pland'))$value
+    perc_crop <- (df_lsm %>% filter(ID==i, class==41, metric=='pland'))$value 
+    
+    if(is_empty(perc_past)){perc_past=0}
+    
+    if(is_empty(perc_crop)){perc_crop=0}
+    
+    if(perc_crop!=0|perc_past!=0){
+      
+        if(perc_past/(perc_crop+perc_past)>=0.5){
+        
+        list_hydro[[i]]$maj <- 'past'
+      }
+    
+      if(perc_crop/(perc_crop+perc_past)>=0.5){
+        
+        list_hydro[[i]]$maj <- 'crop'
+      }
+
+    }
+  
+    
+    
+
+}
+
+df_hydro <- do.call("rbind",list_hydro) %>% drop_na()
+
+dim(df_hydro)
+
+```
+
+## BOXPLOTTING
+
+We compute boxplots of % of lost forest, for the two main agriculture types: pasture or crops
+
+```{r }
+
+
+ggplot(df_hydro) + 
+  geom_boxplot(aes(x=factor(maj),y=d.rios, group=maj, fill=factor(maj)), show.legend = FALSE, alpha=0.2) +
+  scale_y_continuous(limits = quantile(df_hydro$d.rios, c(0.1, 0.9)))+ 
+  labs(title = paste0("d.rios per hydrobasin"), x="", y="")+ 
+  theme_bw()+
+  theme(axis.text.x = element_text(size = 12), axis.title.x = element_text(size = 10, vjust = 1.5, hjust=1),
+        axis.text.y = element_text(size = 12), axis.title.y = element_text(size = 10, angle = 0, vjust=1.05),
+        plot.title = element_text(size = 10, face = "bold", hjust=0.5))
+
+ggsave(file.path(dir_plot, paste0("d.rios.boxplot.pdf")), dpi = 300)
+
+```
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+
+
+
+
+
+
+
+

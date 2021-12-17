@@ -23,19 +23,11 @@ library(plyr)
 library(tidyverse)
 library(tidyr)
 library(dplyr)
-library(foreach)
-library(iterators)
-library(lwgeom)
-library(parallel)
-library(doParallel)
 library(maps)
-library(nnet)
 library(ggplot2)
-library(latticeExtra)
 library(sp)
 library(rgdal)
 library(raster)
-library(stringi)
 library(ggmap)
 library(sf)
 library(viridis)
@@ -52,7 +44,7 @@ year_f = 2019
 df_lsm_i <- list()
 df_lsm_f <- list()
 
-for (i in 1:1600){
+for (i in 1:200){
 
     WD.tmp = list.files(path=dir_data, pattern = paste0("Basin_",i,"_"), full.names = TRUE)
 
@@ -79,7 +71,7 @@ list_deforest <- list()
 
 j=0
 
-for (i in 1:1600){
+for (i in 1:200){
   
   perc_past <- (df_lsm_f_bind %>% filter(ID==i, class==15, metric=='pland'))$value
   perc_crop <- (df_lsm_f_bind %>% filter(ID==i, class==41, metric=='pland'))$value ### attention !!

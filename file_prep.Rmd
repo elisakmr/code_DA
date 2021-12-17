@@ -46,13 +46,13 @@ library(terra)
 ```
 
 
-## Setting up basin files
+## Setting up basin files TBRUN once only!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 ```{r }
 
-hydrobasin <- st_read(file.path(dir_data, "hydroshed","hydrobasins_level9","hydrobasin_mg_lev9.shp"))
+hydrobasin <- st_read(file.path(dir_data, "hydroshed", "subbas_3bas.shp"))
 
-for (i in 1:3389){
+for (i in 1:2031){
   extractBasin(i, hydrobasin[i,])
 }
 
@@ -60,32 +60,31 @@ for (i in 1:3389){
 
 ## MAPBIOMAS cropping
 
+1988
+
+
 ```{r }
 
 # Mapbiomas raster for whole MT
 mapbiomas_full <- rast(file.path(dir_data, "mapbiomas", "biomas1985_2019_mg.tif"))
 
 # Hydroshed hydrobasins at level 9
-hydrobasin <- st_read(file.path(dir_data, "hydroshed","hydrobasins_level9","hydrobasin_mg_lev9.shp"))
+hydrobasin <- st_read(file.path(dir_data, "hydroshed", "subbas_3bas.shp"))
 
 # Cropping
 tictoc::tic()
 
-  no_cores <- detectCores()
-  cl <- makeCluster(no_cores) # setting up number of cores
-  registerDoParallel(cl) # parallelizing on them
-  
-for (i in 1:3389){
-  
+for (i in 1:2031){
+ 
   mapbiomas_crop <- terra::crop(mapbiomas_full,hydrobasin[i,])
   mapbiomas_mask <- terra::mask(mapbiomas_crop,vect(hydrobasin[i,]))
-  mapbiomas_mask.utm = terra::project(rast(mapbiomas_mask),"+init=epsg:32721",method="ngb")
+  mapbiomas_mask_utm <- terra::project(mapbiomas_mask,"+init=epsg:32721",method="ngb")
 
   WD.tmp = list.files(path=dir_data, pattern = paste0("Basin_",i,"_"), full.names = TRUE)
 
-  terra::writeRaster(mapbiomas_mask, file.path(WD.tmp, paste0("mapbiomas_", i, ".tif")), overwrite = TRUE)
+  terra::writeRaster(mapbiomas_mask_utm, file.path(WD.tmp, paste0("mapbiomas_", i, ".tif")), overwrite = TRUE)
 
-  }
+    }
 
 tictoc::toc() 
 
@@ -100,18 +99,18 @@ tictoc::toc()
 modis_full <- rast(file.path(dir_data, "pangaea", "panga_braz84_mt.tif"))
 
 # Hydroshed hydrobasins at level 9
-hydrobasin <- st_read(file.path(dir_data, "hydroshed","hydrobasins_level9","hydrobasin_mg_lev9.shp"))
-
+hydrobasin <- st_read(file.path(dir_data, "hydroshed", "subbas_3bas.shp"))
 
 # Cropping
-for (i in 1:3389){
+for (i in 1:10){
   
   modis_crop <- terra::crop(modis_full,hydrobasin[i,])
   modis_mask <- terra::mask(modis_crop,vect(hydrobasin[i,]))
+  modis_mask_utm <- terra::project(modis_mask,"+init=epsg:32721",method="ngb")
 
   WD.tmp = list.files(path=dir_data, pattern = paste0("Basin_",i,"_"), full.names = TRUE)
 
-  terra::writeRaster(modis_mask, file.path(WD.tmp, paste0("modis_", i, ".tif")), overwrite = TRUE)
+  terra::writeRaster(modis_mask_utm, file.path(WD.tmp, paste0("modis_", i, ".tif")), overwrite = TRUE)
 
 }
 
@@ -127,22 +126,23 @@ for (i in 1:3389){
 hydronetwork <- st_read(file.path(dir_data, "water_surface", "rios_simples", "rios_simple84.shp"))
 
 # Hydroshed hydrobasins at level 9
-hydrobasin <- st_read(file.path(dir_data, "hydroshed","hydrobasins_level9","hydrobasin_mg_lev9.shp"))
+hydrobasin <- st_read(file.path(dir_data, "hydroshed", "subbas_3bas.shp"))
 
 
 tictoc::tic()
   no_cores <- detectCores()
-  cl <- makeCluster(no_cores) # setting up number of cores
+  cl <- makeCluster(no_cores-10) # setting up number of cores
   registerDoParallel(cl) # parallelizing on them
   
-  foreach(i=c(1:3389), .packages=c('sf')) %dopar%  { #
+  foreach(i=c(11:2031), .packages=c('sf')) %dopar%  { #
     
     WD.tmp = list.files(path=dir_data, pattern = paste0("Basin_",i,"_"), full.names = TRUE)
     
     crop_list <- st_intersects(hydrobasin[i,],hydronetwork)
     crop_shp <- hydronetwork[unlist(crop_list),]
-    
-    st_write(crop_shp, file.path(WD.tmp, paste0("riossimple_",i,".shp")), delete_layer = TRUE)
+    crop.utm <- st_transform(crop_shp, crs="EPSG:32721") 
+
+    st_write(crop.utm, file.path(WD.tmp, paste0("riossimple_",i,".shp")), delete_layer = TRUE)
   
    }
   
@@ -163,7 +163,7 @@ tictoc::toc()
 polynetwork <- st_read(file.path(dir_data, "water_surface", "rios_poly", "output_hidro_poly.shp"))
 
 # Hydroshed hydrobasins at level 9
-hydrobasin <- st_read(file.path(dir_data, "hydroshed","hydrobasins_level9","hydrobasin_mg_lev9.shp"))
+hydrobasin <- st_read(file.path(dir_data, "hydroshed", "subbas_3bas.shp"))
 
 
 tictoc::tic()
@@ -171,7 +171,7 @@ tictoc::tic()
   cl <- makeCluster(no_cores) # setting up number of cores
   registerDoParallel(cl) # parallelizing on them
   
-  foreach(i=c(1:3389), .packages=c('sf')) %dopar%  { #
+  foreach(i=c(1:2031), .packages=c('sf')) %dopar%  { #
     
     WD.tmp = list.files(path=dir_data, pattern = paste0("Basin_",i,"_"), full.names = TRUE)
     
@@ -179,8 +179,9 @@ tictoc::tic()
       
       crop_list <- st_intersects(hydrobasin[i,],polynetwork)
       crop_shp <- polynetwork[unlist(crop_list),]
-    
-      st_write(crop_shp, file.path(WD.tmp, paste0("riospoly_",i,".shp")), delete_layer = TRUE)
+      crop.utm <- st_transform(crop_shp, crs="EPSG:32721") 
+
+      st_write(crop.utm, file.path(WD.tmp, paste0("riospoly_",i,".shp")), delete_layer = TRUE)
 
     }
   
@@ -203,7 +204,7 @@ tictoc::toc()
 nascente <- st_read(file.path(dir_data, "water_surface", "nascentes", "nascente84.shp"))
 
 # Hydroshed hydrobasins at level 9
-hydrobasin <- st_read(file.path(dir_data, "hydroshed","hydrobasins_level9","hydrobasin_mg_lev9.shp"))
+hydrobasin <- st_read(file.path(dir_data, "hydroshed", "subbas_3bas.shp"))
 
 
 tictoc::tic()
@@ -211,15 +212,16 @@ tictoc::tic()
   cl <- makeCluster(no_cores) # setting up number of cores
   registerDoParallel(cl) # parallelizing on them
   
-  foreach(i=c(1:3389), .packages=c('sf')) %dopar%  { #
+  foreach(i=c(1:2031), .packages=c('sf')) %dopar%  { #
     
     WD.tmp = list.files(path=dir_data, pattern = paste0("Basin_",i,"_"), full.names = TRUE)
 
       
       crop_list <- st_intersects(hydrobasin[i,],nascente)
       crop_shp <- nascente[unlist(crop_list),]
-    
-      st_write(crop_shp, file.path(WD.tmp, paste0("nascente_",i,".shp")), delete_layer = TRUE)
+      crop.utm <- st_transform(crop_shp, crs="EPSG:32721") 
+
+      st_write(crop.utm, file.path(WD.tmp, paste0("nascente_",i,".shp")), delete_layer = TRUE)
 
   
    }
@@ -240,7 +242,7 @@ tictoc::toc()
 reserv <- st_read(file.path(dir_data, "water_surface", "lago", "input_lago_reservatorio_icv.shp"))
 
 # Hydroshed hydrobasins at level 9
-hydrobasin <- st_read(file.path(dir_data, "hydroshed","hydrobasins_level9","hydrobasin_mg_lev9.shp"))
+hydrobasin <- st_read(file.path(dir_data, "hydroshed", "subbas_3bas.shp"))
 
 
 tictoc::tic()
@@ -248,16 +250,16 @@ tictoc::tic()
   cl <- makeCluster(no_cores) # setting up number of cores
   registerDoParallel(cl) # parallelizing on them
   
-  foreach(i=c(1:3389), .packages=c('sf')) %dopar%  { #
+  foreach(i=c(1:2031), .packages=c('sf')) %dopar%  { #
     
     WD.tmp = list.files(path=dir_data, pattern = paste0("Basin_",i,"_"), full.names = TRUE)
       
       crop_list <- st_intersects(hydrobasin[i,],reserv)
       crop_shp <- reserv[unlist(crop_list),]
+      crop.utm <- st_transform(crop_shp, crs="EPSG:32721") 
     
-      st_write(crop_shp, file.path(WD.tmp, paste0("reserv_",i,".shp")), delete_layer = TRUE)
+      st_write(crop.utm, file.path(WD.tmp, paste0("reserv_",i,".shp")), delete_layer = TRUE)
 
-    
   
    }
   

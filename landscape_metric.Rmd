@@ -42,13 +42,14 @@ library(terra)
 
 ```{r }
 
-year <- 2019
+year <- 1985
 time_span <- c(1985:2019)
 y <- which(year==time_span)
+tampon <- 500 #100, 250, 500
 
 ```
 
-## Computing metrics on for loop
+## Computing metrics on whole basin
 
 ```{r }
 
@@ -58,17 +59,17 @@ tictoc::tic()
   cl <- makeCluster(no_cores) # setting up number of cores
   registerDoParallel(cl) # parallelizing on them
   
-  foreach(i=c(1:1700), .packages=c('landscapemetrics', 'terra', 'raster')) %dopar%  { 
+  foreach(i=c(1:2031), .packages=c('landscapemetrics', 'terra', 'raster')) %dopar%  { 
 
 
   # directory
   WD.tmp = list.files(path=dir_data, pattern = paste0("Basin_",i,"_"), full.names = TRUE)
   
   # loading landuse data
-  mapbiomas_crop <- rast(file.path(WD.tmp, paste0("mapbiomas_",i, ".tif")))
+  mapbiomas <- rast(file.path(WD.tmp, paste0("mapbiomas_",i, ".tif")))
   
   #computing landscape metrics at basin scale (MapBiomas)
-  mapbiomas.basin.lsm = calculate_lsm(raster(mapbiomas_crop[[y]]),level="class",metric = c("ca","pland","np"),directions =8)
+  mapbiomas.basin.lsm = calculate_lsm(raster(mapbiomas[[y]]),level="class",metric = c("ca","pland","np"),directions =8)
   
   mapbiomas.basin.df = as.data.frame(mapbiomas.basin.lsm)
   
@@ -85,7 +86,50 @@ tictoc::toc()
 
 ```
 
+## Computing metrics on riparian vegetation
+
+We assess 3 buffer size: 100, 250, 500 meters
+
+```{r }
+
+tictoc::tic()
+
+  no_cores <- detectCores()
+  cl <- makeCluster(no_cores/2) # setting up number of cores
+  registerDoParallel(cl) # parallelizing on them
+  
+  foreach(i=c(1:2031), .packages=c('landscapemetrics', 'terra', 'raster', 'sf')) %dopar%  { 
+
+
+  # directory
+  WD.tmp = list.files(path=dir_data, pattern = paste0("Basin_",i,"_"), full.names = TRUE)
+  
+  # loading landuse data
+  mapbiomas <- rast(file.path(WD.tmp, paste0("mapbiomas_",i, ".tif")))
+  nascente <- st_read(file.path(WD.tmp, paste0("nascente_",i,".shp"))) 
+  
+  if(nrow(nascente)>0){
+    
+    nascente.buf100 = st_buffer(nascente, dist = tampon)
+    mapbiomas_buf = terra::mask(mapbiomas,vect(nascente.buf100))
+  
+    #computing landscape metrics at basin scale (MapBiomas)
+    mapbiomas.basin.lsm = calculate_lsm(raster(mapbiomas_buf[[y]]),level="class",metric = c("ca","pland","np"),directions =8)
+    
+    mapbiomas.basin.df = as.data.frame(mapbiomas.basin.lsm)
+    
+    mapbiomas.basin.df$ID = i
+  }
+  
+  else {mapbiomas.basin.df <- "nonascente"}
+  
+  save(mapbiomas.basin.df, file = file.path(WD.tmp, paste0(year, "_mapbiomas_lsm_buf",tampon, "_",i,".RData")))
+
+}
+
+  stopCluster(cl)
+tictoc::toc()
 
 
 
-
+```
