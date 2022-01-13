@@ -40,8 +40,11 @@ library(viridis)
 
 # foret = 3, savanna = 4, pasture = 15, soybean = 39, other temp.crops = 41, per.crops = 36
 
-year = 2019
+time_laps <- c(1985:2019)
+year=2019
+y <- which(time_laps==year)
 
+basin_select <- st_read(file.path(dir_data, "hydroshed", "basin_select.shp"))
 
 ```
 
@@ -52,36 +55,41 @@ year = 2019
 
 list_hydro <- list()
 
-for (i in 1:2031){
+i=0
 
-    WD.tmp = list.files(path=dir_data, pattern = paste0("Basin_",i,"_"), full.names = TRUE)
+for (basin_id in basin_select$HYBAS_ID){
+  
+    i=i+1
+    
 
-    list_hydro[[i]] <- get(load(file=file.path(WD.tmp, paste0("hydrometric_",i,".RData"))))
+    WD.tmp = list.files(path=dir_data, pattern = paste0("_",basin_id), full.names = TRUE)[1]
+
+    list_hydro[[i]] <- get(load(file=file.path(WD.tmp, paste0("hydrometric_",basin_id,".RData"))))
     
     list_hydro[[i]]$maj <- NA
     
-    df_lsm <- get(load(file=file.path(WD.tmp, paste0(year, "_mapbiomas_lsm",i,".RData")))) %>% mutate(annee=year)
+    df_lsm <- get(load(file=file.path(WD.tmp, paste0("mapbiomas_lsm_",basin_id,".RData")))) %>% mutate(ID=basin_id) 
     
-    perc_past <- (df_lsm %>% filter(ID==i, class==15, metric=='pland'))$value
-    perc_crop <- (df_lsm %>% filter(ID==i, class==41, metric=='pland'))$value 
+    perc_past <- (df_lsm %>% filter(ID==basin_id, class==15, metric=='pland', layer==y))$value
+    perc_crop <- (df_lsm %>% filter(ID==basin_id, class==39, metric=='pland', layer==y))$value 
     
     if(is_empty(perc_past)){perc_past=0}
     
     if(is_empty(perc_crop)){perc_crop=0}
     
-    if(perc_crop!=0|perc_past!=0){
+    #if(perc_crop!=0|perc_past!=0){
       
-        if(perc_past/(perc_crop+perc_past)>=0.5){
+        if(perc_past>=50){
         
-        list_hydro[[i]]$maj <- 'past'
+        list_hydro[[i]]$maj <- 'pasture'
       }
     
-      if(perc_crop/(perc_crop+perc_past)>=0.5){
+      if(perc_crop>=50){
         
-        list_hydro[[i]]$maj <- 'crop'
+        list_hydro[[i]]$maj <- 'soybean'
       }
 
-    }
+    #}
   
     
     
@@ -91,6 +99,31 @@ for (i in 1:2031){
 df_hydro <- do.call("rbind",list_hydro) %>% drop_na()
 
 dim(df_hydro)
+
+```
+
+## Statistical tests
+
+Importance de la taille de l'échantillon: pvalue inf 5% sur petit échantillon est plus significatif que pvalue sup 5%
+
+```{r }
+
+df_crop_hydro <- df_hydro %>% filter(maj=='soybean') %>% dplyr::select(d.rios)
+df_past_hydro <- df_hydro %>% filter(maj=='pasture') %>% dplyr::select(d.rios)
+
+# 1. Normality: h0: population suit loi normale. rejetée si pvalue inf à 5%
+shapiro.test(unlist(df_crop_hydro))
+shapiro.test(unlist(df_past_hydro))
+
+ggplot(df_hydro %>% filter(maj=='soybean'))+
+  geom_histogram(aes(x=d.rios))
+
+ggplot(df_hydro %>% filter(maj=='pasture'))+
+  geom_histogram(aes(x=d.rios))
+
+
+# 2. Wilcoxon: distributions: h0: meme loi, si pvalue inf à 5% rejetée 
+wilcox.test(unlist(df_past_hydro), unlist(df_crop_hydro))
 
 ```
 

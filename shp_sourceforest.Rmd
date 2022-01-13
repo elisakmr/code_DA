@@ -1,0 +1,109 @@
+---
+title: "Shapefile of % forest in source buffer"
+output: html_document
+---
+
+```{r }
+
+if ((Sys.info()["nodename"]) == "COP026") {
+  dir_data <- "C:/Users/arvor_d/Documents/workwork/data"
+  dir_plot <- "C:/Users/arvor_d/Documents/workwork/plot"
+} else if ((Sys.info()["nodename"]) == "COSTELSV6") {
+  dir_data <- "F:/kamir_e/$data"
+  dir_plot <- "F:/kamir_e/$plot "
+}
+
+```
+
+## Library
+
+```{r }
+
+library(plyr)
+library(tidyverse)
+library(tidyr)
+library(dplyr)
+library(maps)
+library(ggplot2)
+library(sp)
+library(rgdal)
+library(raster)
+library(ggmap)
+library(sf)
+library(viridis)
+
+```
+
+## PARAMETERS
+
+```{r }
+
+# foret = 3, savanna = 4, pasture = 15, soybean = 39, other temp.crops = 41, per.crops = 36
+
+time_laps <- c(1985:2019)
+year=2019
+y <- which(time_laps==year)
+
+tampon = 100
+
+basin_select <- st_read(file.path(dir_data, "hydroshed", "basin_select.shp"))
+
+
+```
+
+## LOADING & MERGING files
+
+
+```{r }
+
+list_foret <- list()
+
+j=0
+
+for (i in basin_select$HYBAS_ID){
+    
+    j=j+1
+    
+    WD.tmp = list.files(path=dir_data, pattern = paste0("_",i), full.names = TRUE)[1]
+
+    list_foret[[j]] <- get(load(file=file.path(WD.tmp, paste0("mapbiomas_lsm_buf",tampon,"_",i,".RData")))) 
+    
+    if(list_foret[[j]]=="nonascente"){
+      list_foret[[j]] <- NA
+    }
+    
+    else {list_foret[[j]] <- get(load(file=file.path(WD.tmp, paste0("mapbiomas_lsm_buf",tampon,"_",i,".RData")))) %>% filter(class==3,metric=='pland', layer==y) %>% mutate(hybas_id=i)}
+
+ 
+}
+
+df_foret <- do.call("rbind",list_foret) %>% dplyr::select(hybas_id,value)
+
+
+```
+
+## Statistics
+
+Importance de la taille de l'échantillon: pvalue inf 5% sur petit échantillon est plus significatif que pvalue sup 5%
+
+```{r }
+
+ggplot(df_foret)+
+  geom_histogram(aes(x=value))
+
+```
+
+## BUILDING SHAPEFILE
+
+
+```{r }
+
+basin_foret <- basin_select 
+
+for (i in df_foret$hybas_id){
+  basin_foret[which(i==basin_foret$HYBAS_ID),'buf.foret']<-df_foret[which(i==df_foret$hybas_id),]$value
+}
+
+st_write(basin_foret, file.path(dir_data, "results_shp", "buf_foret.shp"), delete_layer = TRUE)
+
+```

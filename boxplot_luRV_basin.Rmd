@@ -40,9 +40,11 @@ library(viridis)
 
 # foret = 3, savanna = 4, pasture = 15, soybean = 39, other temp.crops = 41, per.crops = 36
 
+time_laps <- c(1985:2019)
 year=2019
-lu.code = 41
-lu.name = "tempcrop"
+y <- which(time_laps==year)
+lu.code = 3
+lu.name = "forest"
 tampon=100
 
 
@@ -65,12 +67,12 @@ for (i in 1:2031){
 
     basin.name <- hydrobasin[i,]$basin
     
-    list_rv[[i]] <- get(load(file=file.path(WD.tmp, paste0(year, "_mapbiomas_lsm_buf",tampon, "_",i,".RData")))) 
+    list_rv[[i]] <- get(load(file=file.path(WD.tmp, paste0("mapbiomas_lsm_buf",tampon, "_",i,".RData")))) 
     
     if(list_rv[[i]]=="nonascente"){
     list_rv[[i]] <- NA}
 
-    else {list_rv[[i]] <- list_rv[[i]] %>% mutate(basin=basin.name) }
+    else {list_rv[[i]] <- list_rv[[i]] %>% filter(layer==y) %>% mutate(basin=basin.name) }
 
 }
 
@@ -78,6 +80,26 @@ for (i in 1:2031){
 df_lsm_rv <- do.call("rbind",list_rv) %>% dplyr::select(metric, class, basin, ID, value) %>% filter(metric=='pland', class == lu.code) %>% drop_na()
 
 dim(df_lsm_rv)
+
+```
+
+## Statistical tests
+
+```{r }
+
+df_xingu <- df_lsm_rv %>% filter(basin=='xingu') %>% dplyr::select(value)
+df_juru <- df_lsm_rv %>% filter(basin=='juruenc') %>% dplyr::select(value)
+df_teles <- df_lsm_rv %>% filter(basin=='teles') %>% dplyr::select(value)
+
+
+# 1. Normality
+
+shapiro.test(unlist(df_xingu))
+shapiro.test(unlist(df_juru))
+shapiro.test(unlist(df_teles))
+
+
+
 
 ```
 
@@ -90,7 +112,7 @@ We compute boxplots of % of lost forest, for the two main agriculture types: pas
 
 ggplot(df_lsm_rv) + 
   geom_boxplot(aes(x=factor(basin),y=value, group=basin, fill=factor(basin)), show.legend = FALSE, alpha=0.2) +
-  coord_cartesian(ylim = quantile(df_lsm_rv$value, c(0, 0.9)))+
+  #coord_cartesian(ylim = quantile(df_lsm_rv$value, c(0, 0.9)))+
   labs(title = paste0(" % ", lu.name," per sub-basin riparian area (",tampon,"m) in ", year), x="", y="")+ 
   theme_bw()+
   theme(axis.text.x = element_text(size = 12), axis.title.x = element_text(size = 10, vjust = 1.5, hjust=1),

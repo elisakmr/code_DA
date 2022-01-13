@@ -40,10 +40,11 @@ library(viridis)
 
 # foret = 3, savanna = 4, pasture = 15, soybean = 39, other temp.crops = 41, per.crops = 36
 
+time_laps <- c(1985:2019)
 year=2019
+y <- which(time_laps==year)
 lu.code = 15
 lu.name = "pasture"
-
 
 ```
 
@@ -54,6 +55,7 @@ lu.name = "pasture"
 
 # basins
 hydrobasin <- st_read(file.path(dir_data, "hydroshed", "subbas_3bas.shp"))
+save(list_basin_index_unique, file = file.path(dir_data, "boundaries", "list_basin.RData"))
 
 # landscape metrics
 list_lsm <- list()
@@ -63,7 +65,7 @@ for (i in 1:2031){
     WD.tmp = list.files(path=dir_data, pattern = paste0("Basin_",i,"_"), full.names = TRUE)
 
     basin.name <- hydrobasin[i,]$basin
-    list_lsm[[i]] <- get(load(file=file.path(WD.tmp, paste0(year, "_mapbiomas_lsm",i,".RData")))) %>% mutate(basin=basin.name) 
+    list_lsm[[i]] <- get(load(file=file.path(WD.tmp, paste0("mapbiomas_lsm",i,".RData")))) %>% mutate(basin=basin.name) %>% filter(layer==y)
 
 }
 
@@ -71,8 +73,36 @@ for (i in 1:2031){
 df_lsm <- do.call("rbind",list_lsm) %>% filter(metric=='pland', class == lu.code) 
 
 dim(df_lsm)
+#unique(do.call("rbind",list_lsm)$class)
 
 ```
+## Statistical tests
+
+```{r }
+
+df_xingu <- df_lsm %>% filter(basin=='xingu') %>% dplyr::select(value)
+df_juru <- df_lsm %>% filter(basin=='juruenc') %>% dplyr::select(value)
+df_teles <- df_lsm %>% filter(basin=='teles') %>% dplyr::select(value)
+
+
+# 1. Normality
+
+shapiro.test(unlist(df_xingu))
+shapiro.test(unlist(df_juru))
+shapiro.test(unlist(df_teles))
+
+ggplot(df_lsm%>% filter(basin=='xingu'))+
+  geom_histogram(aes(x=value))
+
+ggplot(df_lsm%>% filter(basin=='juruenc'))+
+  geom_histogram(aes(x=value))
+
+ggplot(df_lsm%>% filter(basin=='teles'))+
+  geom_histogram(aes(x=value))
+
+
+```
+
 
 ## BOXPLOTTING
 
@@ -80,10 +110,9 @@ We compute boxplots of % of lost forest, for the two main agriculture types: pas
 
 ```{r }
 
-
 ggplot(df_lsm) + 
   geom_boxplot(aes(x=factor(basin),y=value, group=basin, fill=factor(basin)), show.legend = FALSE, alpha=0.2) +
-  coord_cartesian(ylim = quantile(df_lsm_rv$value, c(0, 0.2)))+
+  #coord_cartesian(ylim = c(quantile(df_lsm_rv$value)[1],quantile(df_lsm_rv$value)[4]))+
   labs(title = paste0(" % ", lu.name," per basin ", year), x="", y="")+ 
   theme_bw()+
   theme(axis.text.x = element_text(size = 12), axis.title.x = element_text(size = 10, vjust = 1.5, hjust=1),

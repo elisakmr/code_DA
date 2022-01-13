@@ -12,7 +12,7 @@ if ((Sys.info()["nodename"]) == "COP026") {
   dir_plot <- "C:/Users/arvor_d/Documents/workwork/plot"
 } else if ((Sys.info()["nodename"]) == "COSTELSV6") {
   dir_data <- "F:/kamir_e/$data"
-  dir_plot <- "F:/kamir_e/$plot "
+  dir_plot <- "F:/kamir_e/$plot"
 }
 
 ```
@@ -42,7 +42,7 @@ library(terra)
 
 ```{r }
 
-year <- 1985
+year <- 2019
 time_span <- c(1985:2019)
 y <- which(year==time_span)
 tampon <- 500 #100, 250, 500
@@ -69,13 +69,13 @@ tictoc::tic()
   mapbiomas <- rast(file.path(WD.tmp, paste0("mapbiomas_",i, ".tif")))
   
   #computing landscape metrics at basin scale (MapBiomas)
-  mapbiomas.basin.lsm = calculate_lsm(raster(mapbiomas[[y]]),level="class",metric = c("ca","pland","np"),directions =8)
+  mapbiomas.basin.lsm = calculate_lsm(mapbiomas,level="class",metric = c("ca","pland","np"),directions =8)
   
   mapbiomas.basin.df = as.data.frame(mapbiomas.basin.lsm)
   
   mapbiomas.basin.df$ID = i
   
-  save(mapbiomas.basin.df, file = file.path(WD.tmp, paste0(year, "_mapbiomas_lsm",i,".RData")))
+  save(mapbiomas.basin.df, file = file.path(WD.tmp, paste0("mapbiomas_lsm",i,".RData")))
 
 }
 
@@ -114,7 +114,7 @@ tictoc::tic()
     mapbiomas_buf = terra::mask(mapbiomas,vect(nascente.buf100))
   
     #computing landscape metrics at basin scale (MapBiomas)
-    mapbiomas.basin.lsm = calculate_lsm(raster(mapbiomas_buf[[y]]),level="class",metric = c("ca","pland","np"),directions =8)
+    mapbiomas.basin.lsm = calculate_lsm(mapbiomas_buf,level="class",metric = c("ca","pland","np"),directions =8)
     
     mapbiomas.basin.df = as.data.frame(mapbiomas.basin.lsm)
     
@@ -123,7 +123,7 @@ tictoc::tic()
   
   else {mapbiomas.basin.df <- "nonascente"}
   
-  save(mapbiomas.basin.df, file = file.path(WD.tmp, paste0(year, "_mapbiomas_lsm_buf",tampon, "_",i,".RData")))
+  save(mapbiomas.basin.df, file = file.path(WD.tmp, paste0("mapbiomas_lsm_buf",tampon, "_",i,".RData")))
 
 }
 

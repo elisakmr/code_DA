@@ -12,7 +12,7 @@ if ((Sys.info()["nodename"]) == "COP026") {
   dir_plot <- "C:/Users/arvor_d/Documents/workwork/plot"
 } else if ((Sys.info()["nodename"]) == "COSTELSV6") {
   dir_data <- "F:/kamir_e/$data"
-  dir_plot <- "F:/kamir_e/$plot "
+  dir_plot <- "F:/kamir_e/$plot"
 }
 
 ```
@@ -55,55 +55,63 @@ sub_basin.84 <- st_transform(sub_basin.in, crs="EPSG:4326")
 
 telespires.valid <- st_make_valid(telespires.84)
 juruenc.valid <- st_make_valid(juruenc.84)
+xingu.valid1 <- st_make_valid(xingu.84)
+xingu_valid <- st_union(xingu.valid1)
 
-```
-
-## Computing exact Xingu basin shapefile
-
-Intersection between MT and Xingu from "sub_basin"
-
-```{r }
-
-xingu_shp <- st_intersection(sub_basin.84[13,],mt_borders)
-
-plot(xingu_shp$geometry)
-plot(mt_borders$geometry, add=TRUE)
+st_write(telespires.valid, file.path(dir_data, "boundaries", "teles.shp"), delete_layer = TRUE)
+st_write(juruenc.valid, file.path(dir_data, "boundaries", "juruena.shp"), delete_layer = TRUE)
+st_write(xingu_valid, file.path(dir_data, "boundaries", "xingu.shp"), delete_layer = TRUE)
 
 
 ```
 
 ## Selecting sub-basin of interest
 
-1. Intersection between hydrobasin from hydroshed and shapes of the basins selected
+Intersection between hydrobasin from hydroshed and shapes of the basins selected
 
 ```{r }
 
 hydrobasin <- st_read(file.path(dir_data, "hydroshed","hydrobasins_level9","hydrobasin_mg_lev9.shp"))
+xingu.valid <- st_read(file.path(dir_data, "boundaries", "xingu.shp"))
+telespires.valid <- st_read(file.path(dir_data, "boundaries", "teles.shp"))
+juruenc.valid <- st_read(file.path(dir_data, "boundaries", "juruena.shp"))
 
 # Xingu basin
-int.list <- st_intersects(xingu_shp, hydrobasin)
+xingu_buf<-st_buffer(xingu.valid, dist = 5500)
+int.list <- st_contains(xingu_buf, hydrobasin)
 hydrobas_xingu <- hydrobasin[unlist(int.list),] %>% mutate(basin='xingu')
 
 # Teles pires basin
-int.list <- st_intersects(telespires.valid, hydrobasin)
+teles_buf<-st_buffer(telespires.valid, dist = 8000)
+int.list <- st_contains(teles_buf, hydrobasin)
 hydrobas_telespires <- hydrobasin[unlist(int.list),] %>% mutate(basin='teles')
 
 # Juruenc basin
-int.list <- st_intersects(juruenc.valid, hydrobasin)
-hydrobas_juruenc <- hydrobasin[unlist(int.list),] %>% mutate(basin='juruenc')
+juru_buf<-st_buffer(juruenc.valid, dist = 7000)
+int.list <- st_contains(juru_buf, hydrobasin)
+hydrobas_juruenc <- hydrobasin[unlist(int.list),] %>% mutate(basin='juruena')
 
 
-plot(hydrobas_xingu$geometry)
-plot(hydrobas_telespires$geometry, add=TRUE)
-plot(hydrobas_juruenc$geometry, add=TRUE)
-plot(mt_borders$geometry, add=TRUE)
+# plot(juru_buf$geometry)
+# plot(juruenc.valid$geometry, add=TRUE)
+# plot(hydrobas_juruenc$geometry, add=TRUE)
+# plot(mt_borders$geometry, add=TRUE)
 
 
-basin_interest <- rbind(hydrobas_xingu, hydrobas_telespires, hydrobas_juruenc)
-st_write(basin_interest, file.path(dir_data, "hydroshed", "subbas_3bas.shp"), delete_layer = TRUE)
+basin_int <- rbind(hydrobas_xingu, hydrobas_telespires, hydrobas_juruenc)
+
+# ajustement: some basins have to be added/remove manually
+ad_xingu <- which(hydrobasin$HYBAS_ID==6090529250) 
+ad_juruena <- which(hydrobasin$HYBAS_ID==6090420970)
+basin_int2 <- rbind(basin_int, hydrobasin[ad_xingu,] %>% mutate(basin='xingu'))
+basin_int3 <- rbind(basin_int2, hydrobasin[ad_juruena,] %>% mutate(basin='juruena'))
+basin_int4 <- basin_int3[-which(basin_int3$HYBAS_ID==6090586250),]
+basin_interest <- basin_int4[-20,]
+
+# writing final shapefile
+st_write(basin_interest[!duplicated(basin_interest$HYBAS_ID),], file.path(dir_data, "hydroshed", "basin_select.shp"), delete_layer = TRUE)
 
 
 ```
-
 
 

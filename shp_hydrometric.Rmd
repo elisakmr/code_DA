@@ -1,0 +1,105 @@
+---
+title: "Shapefile of hydrologic metrics"
+output: html_document
+---
+
+```{r }
+
+if ((Sys.info()["nodename"]) == "COP026") {
+  dir_data <- "C:/Users/arvor_d/Documents/workwork/data"
+  dir_plot <- "C:/Users/arvor_d/Documents/workwork/plot"
+} else if ((Sys.info()["nodename"]) == "COSTELSV6") {
+  dir_data <- "F:/kamir_e/$data"
+  dir_plot <- "F:/kamir_e/$plot "
+}
+
+```
+
+## Library
+
+```{r }
+
+library(plyr)
+library(tidyverse)
+library(tidyr)
+library(dplyr)
+library(maps)
+library(ggplot2)
+library(sp)
+library(rgdal)
+library(raster)
+library(ggmap)
+library(sf)
+library(viridis)
+
+```
+
+## PARAMETERS
+
+```{r }
+
+# foret = 3, savanna = 4, pasture = 15, soybean = 39, other temp.crops = 41, per.crops = 36
+
+year = 2019
+
+basin_select <- st_read(file.path(dir_data, "hydroshed", "basin_select.shp"))
+
+
+```
+
+## LOADING & MERGING files
+
+
+```{r }
+
+list_hydro <- list()
+
+j=0
+
+for (i in basin_select$HYBAS_ID){
+    
+    j=j+1
+    
+    WD.tmp = list.files(path=dir_data, pattern = paste0("_",i), full.names = TRUE)[1]
+
+    list_hydro[[j]] <- get(load(file=file.path(WD.tmp, paste0("hydrometric_",i,".RData")))) %>% mutate(hybas_id=i) 
+    
+ 
+}
+
+df_hydro <- do.call("rbind",list_hydro) %>% dplyr::select(d.rios, hybas_id) # mutate_all(~replace(., is.na(.), 0))
+
+
+```
+
+## Statistics
+
+Importance de la taille de l'échantillon: pvalue inf 5% sur petit échantillon est plus significatif que pvalue sup 5%
+
+```{r }
+
+
+ggplot(df_hydro)+
+  geom_histogram(aes(x=d.rios))
+
+
+
+```
+
+## BUILDING SHAPEFILE
+
+
+```{r }
+
+basin_rios <- basin_select 
+
+for (i in df_hydro$hybas_id){
+  basin_rios[which(i==basin_rios$HYBAS_ID),'d.rios']<-df_hydro[which(i==df_hydro$hybas_id),]$d.rios
+}
+
+st_write(basin_rios, file.path(dir_data, "results_shp", "drios.shp"), delete_layer = TRUE)
+
+```
+
+
+

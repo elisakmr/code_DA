@@ -40,10 +40,13 @@ library(viridis)
 
 # foret = 3, savanna = 4, pasture = 15, soybean = 39, other temp.crops = 41, per.crops = 36
 
+time_laps <- c(1985:2019)
 year=2019
+y <- which(time_laps==year)
 lu.code = 3
-lu.name = "foret"
+lu.name = "forest"
 
+basin_select <- st_read(file.path(dir_data, "hydroshed", "basin_select.shp"))
 
 ```
 
@@ -52,23 +55,27 @@ lu.name = "foret"
 
 ```{r }
 
+
 list_lsm <- list()
+j=0
 
-for (i in 1:1032){
+for (basin_id in basin_select$HYBAS_ID){
+  
+    j=j+1
+    
+    WD.tmp = list.files(path=dir_data, pattern = paste0("_",basin_id), full.names = TRUE)[1]
 
-    WD.tmp = list.files(path=dir_data, pattern = paste0("Basin_",i,"_"), full.names = TRUE)
-
-    list_lsm[[i]] <- get(load(file=file.path(WD.tmp, paste0(year, "_mapbiomas_lsm",i,".RData")))) %>% mutate(annee=year) 
+    list_lsm[[j]] <- get(load(file=file.path(WD.tmp, paste0("mapbiomas_lsm_",basin_id,".RData")))) %>% mutate(annee=year, ID=basin_id) 
 
 }
 
-df_lsm <- do.call("rbind",list_lsm)
+df_lsm_bv <- do.call("rbind",list_lsm) %>% filter(layer==y)
 
-dim(df_lsm)
-unique(df_lsm$class)
-df_lsm %>% filter(metric == 'pland')
+dim(df_lsm_bv)
+length(unique(df_lsm_bv$ID))
 
 ```
+
 
 ## BUILDING table of values of forest
 
@@ -80,32 +87,66 @@ list_forest <- list()
 
 j=0
 
-for (i in 1:1032){
+for (basin_id in basin_select$HYBAS_ID){
   
-  perc_past <- (df_lsm %>% filter(ID==i, class==15, metric=='pland'))$value
-  perc_crop <- (df_lsm %>% filter(ID==i, class==41, metric=='pland'))$value ### attention !!
+  perc_past <- (df_lsm_bv %>% filter(ID==basin_id, class==15, metric=='pland'))$value
+  perc_crop <- (df_lsm_bv %>% filter(ID==basin_id, class==39, metric=='pland'))$value 
   
   if(is_empty(perc_past)){perc_past=0}
   if(is_empty(perc_crop)){perc_crop=0}
   
-  if(perc_past>=20){
+  if(perc_past>=50){
     j=j+1
-    list_forest[[j]] <- df_lsm %>% filter(ID==i, class == 3|class == 4, metric=='pland') %>% mutate(maj='past')
+    list_forest[[j]] <- df_lsm_bv %>% filter(ID==basin_id, class == 3, metric=='pland') %>% mutate(maj='pasture')
     }
   
-  if(perc_crop>=20){
+  if(perc_crop>=50){
     j=j+1
-    list_forest[[j]] <- df_lsm %>% filter(ID==i, class == 3|class == 4, metric=='pland') %>% mutate(maj='crop')
+    list_forest[[j]] <- df_lsm_bv %>% filter(ID==basin_id, class == 3, metric=='pland') %>% mutate(maj='soybean')
   }
   
 }
 
 
-df_forest <- do.call("rbind",list_forest) %>% mutate(annee=year)
+df_bv <- do.call("rbind",list_forest) %>% mutate(annee=year) %>% dplyr::select(-id)
 
-dim(df_forest)
 
 ```
+
+## Statistical tests
+
+Importance de la taille de l'échantillon: pvalue inf 5% sur petit échantillon est plus significatif que pvalue sup 5%
+
+```{r }
+
+df_crop_bv <- df_bv %>% filter(maj=='soybean') %>% dplyr::select(value)
+df_past_bv <- df_bv %>% filter(maj=='pasture') %>% dplyr::select(value)
+
+# 1. Normality
+
+shapiro.test(unlist(df_past_bv))
+
+ggplot(df_bv %>% filter(maj=='soybean'))+
+  geom_histogram(aes(x=value))
+
+ggplot(df_bv %>% filter(maj=='pasture'))+
+  geom_histogram(aes(x=value))
+
+dim(df_crop_bv) # 158 obs
+dim(df_past_bv) # 185 obs
+
+# 2. Test Student (moyenne)
+
+t.test(unlist(df_crop_bv), unlist(df_past_bv))
+
+# 2. Test Wilcoxon (distribution)
+
+wilcox.test(unlist(df_crop_bv), unlist(df_past_bv))
+
+
+
+```
+
 
 ## BOXPLOTTING
 
@@ -114,7 +155,7 @@ We compute boxplots of % of lost forest, for the two main agriculture types: pas
 ```{r }
 
 
-ggplot(df_forest) + 
+ggplot(df_bv) + 
   geom_boxplot(aes(x=factor(maj),y=value, group=maj, fill=factor(maj)), show.legend = FALSE, alpha=0.2) +
   scale_y_continuous()+
   labs(title = paste0(" % ", lu.name," per hydrobasin ", year), x="", y="")+ 
@@ -123,7 +164,33 @@ ggplot(df_forest) +
         axis.text.y = element_text(size = 12), axis.title.y = element_text(size = 10, angle = 0, vjust=1.05),
         plot.title = element_text(size = 10, face = "bold", hjust=0.5))
 
-
 #ggsave(file.path(dir_plot, paste0(year, lu.name,".boxplot.pdf")), dpi = 300)
 
 ```
+## BOXPLOTTING RV and BV alltogether
+
+We compute boxplots of % of lost forest, for the two main agriculture types: pasture or crops
+
+```{r }
+
+# building df
+df_bv2 <- df_bv %>% mutate(scale='watershed')
+df_rv2 <- df_rv %>% mutate(scale='source buffer')
+ 
+df_tot <- rbind(df_bv2, df_rv2) %>% dplyr::rename('farming.type'='maj')
+
+# plotting
+ggplot(df_tot,aes(factor(scale, levels=c('watershed','source buffer')), value) ) + 
+  geom_boxplot(aes(col=farming.type), show.legend = TRUE, alpha=1.2) +
+  scale_y_continuous()+
+  #scale_color_manual(values=c("#FF9999", "blue2"))+
+  scale_color_brewer(palette="Dark2")+
+  labs(x="", y="% forested area")+ 
+  theme_bw()+
+  theme(axis.text.y = element_text(size = 10), axis.title.y = element_text(size = 10,  vjust=0.99), axis.ticks.x = element_blank())
+
+ggsave(file.path(dir_plot, paste0(year, lu.name,"bv_s_rv.boxplot.pdf")), dpi = 300)
+
+
+```
+

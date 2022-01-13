@@ -42,6 +42,8 @@ library(viridis)
 
 year = 2019
 
+basin_select <- st_read(file.path(dir_data, "hydroshed", "basin_select.shp"))
+
 
 ```
 
@@ -52,18 +54,31 @@ year = 2019
 
 list_lsm <- list()
 
-for (i in 1:1032){
+j=0
 
-    WD.tmp = list.files(path=dir_data, pattern = paste0("Basin_",i,"_"), full.names = TRUE)
+for (i in basin_select$HYBAS_ID){
+    
+    j=j+1
+    
+    WD.tmp = list.files(path=dir_data, pattern = paste0("_",i), full.names = TRUE)[1]
 
-    list_lsm[[i]] <- get(load(file=file.path(WD.tmp, paste0(year, "_mapbiomas_lsm",i,".RData")))) 
+    list_lsm[[j]] <- get(load(file=file.path(WD.tmp, paste0("mapbiomas_lsm_",i,".RData")))) %>% mutate(hybas_id=i) 
     
  
 }
 
-df_lsm <- do.call("rbind",list_lsm) %>% filter(metric=='pland', class == 15|class == 41) %>% dplyr::select(metric, ID, class, value)  %>% spread(class, value) %>% drop_na() %>% dplyr::rename(pasture='15', tcrop='41')
+df_lsm <- do.call("rbind",list_lsm) %>% filter(metric=='pland', class == 15|class == 39, layer==35) %>% dplyr::select(metric, hybas_id, class, value)  %>% spread(class, value) %>% dplyr::rename(pasture='15', soy='39') %>% mutate_all(~replace(., is.na(.), 0))
 
-df_lsm
+
+df_lsm %>% filter(pasture>75)
+#Basin_955_6090499060!!!!! CHOSEN
+
+
+
+df_lsm %>% filter(soy>75)
+#Basin_1855_6090573160 75.9!!!!! CHOSEN
+
+
 ```
 
 ## PLOTTING
@@ -73,18 +88,40 @@ df_lsm
 
 
 ggplot(df_lsm) + 
-  geom_point(aes(x=pasture,y=tcrop), show.legend = FALSE, alpha=0.2) +
-  scale_y_continuous(limits = c(0,10))+ 
-  labs(title = paste0(" % ", lu.name," per hydrobasin ", year), x="pasture", y="tcrop")+ 
-  theme_bw()+
+  geom_point(aes(x=pasture,y=soy), show.legend = FALSE, alpha=0.2) +
+  geom_hline(yintercept = 50, col='red')+
+  geom_vline(xintercept = 50, col='red')+
+  #scale_y_continuous(limits = c(0,10))+ 
+  labs(x="% pasture", y="% soybean")+ 
+  theme_light()+
   theme(axis.text.x = element_text(size = 12), axis.title.x = element_text(size = 10, vjust = 1.5, hjust=1),
-        axis.text.y = element_text(size = 12), axis.title.y = element_text(size = 10, angle = 0, vjust=1.05),
-        plot.title = element_text(size = 10, face = "bold", hjust=0.5))
+        axis.text.y = element_text(size = 12), axis.title.y = element_text(size = 10, angle = 0, vjust=0.99))
 
 
 
+ggsave(file.path(dir_plot, paste0(year,"soy_vs_past.boxplot.pdf")), dpi = 300)
 
 
 ```
+
+## BUILDING SHAPEFILE
+
+
+```{r }
+
+basin_cropast <- basin_select  
+
+
+for (i in df_lsm$hybas_id){
+  basin_cropast[which(i==basin_cropast$HYBAS_ID),'pasture']<-df_lsm[which(i==df_lsm$hybas_id),]$pasture
+  basin_cropast[which(i==basin_cropast$HYBAS_ID),'soy']<-df_lsm[which(i==df_lsm$hybas_id),]$soy
+}
+
+st_write(basin_cropast, file.path(dir_data, "hydroshed", "basin_cropast.shp"), delete_layer = TRUE)
+
+```
+
+
+
 
 
