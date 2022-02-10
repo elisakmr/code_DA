@@ -1,0 +1,81 @@
+---
+title: "Shapefile of double culture"
+output: html_document
+---
+
+```{r }
+
+if ((Sys.info()["nodename"]) == "COP026") {
+  dir_data <- "C:/Users/arvor_d/Documents/workwork/data"
+  dir_plot <- "C:/Users/arvor_d/Documents/workwork/plot"
+} else if ((Sys.info()["nodename"]) == "COSTELSV6") {
+  dir_data <- "F:/kamir_e/$data"
+  dir_plot <- "F:/kamir_e/$plot "
+}
+
+```
+
+## Library
+
+```{r }
+
+library(plyr)
+library(tidyverse)
+library(tidyr)
+library(dplyr)
+library(maps)
+library(ggplot2)
+library(sp)
+library(rgdal)
+library(raster)
+library(ggmap)
+library(sf)
+library(viridis)
+
+```
+
+## PARAMETERS
+
+```{r }
+
+year=2019
+
+# 104 millet cotton, 106 soy millet, 108 soy cotton, 109 soy corn, 
+
+```
+
+## Building shapefile of db culture percentages
+
+```{r }
+
+# Loading selected basins
+basin_select <- st_read(file.path(dir_data, "hydroshed", "basin_select.shp"))
+
+# Loading table of double culture percentages
+df_db <- get(load(file.path(dir_plot, paste0("df_dbcult.RData"))))
+
+# Adding table info to shapefile of basins
+basin_db <- basin_select 
+
+for (i in df_db$ID){
+  basin_db[which(i==basin_db$HYBAS_ID),'db.cult']<-sum(df_db[which(i==df_db$ID),]$value, na.rm = TRUE)
+}
+
+st_write(basin_db, file.path(dir_data, "results_shp", "db_culture.shp"), delete_layer = TRUE)
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+

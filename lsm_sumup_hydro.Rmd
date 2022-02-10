@@ -1,0 +1,105 @@
+---
+title: "Summarizing hydro metrics"
+output: html_document
+---
+
+We summarize hydrographic metrics and add each basin category (soybean or pasture) based on their percentage of each related to the deforested area.
+
+```{r }
+
+if ((Sys.info()["nodename"]) == "COP026") {
+  dir_data <- "C:/Users/arvor_d/Documents/workwork/data"
+  dir_plot <- "C:/Users/arvor_d/Documents/workwork/plot"
+} else if ((Sys.info()["nodename"]) == "COSTELSV6") {
+  dir_data <- "F:/kamir_e/$data"
+  dir_plot <- "F:/kamir_e/$plot"
+}
+
+```
+
+## Library
+
+```{r }
+
+library(plyr)
+library(tidyverse)
+library(tidyr)
+library(dplyr)
+library(maps)
+library(ggplot2)
+library(ggmap)
+library(sf)
+library(viridis)
+
+```
+
+## PARAMETERS
+
+```{r }
+
+# foret = 3, savanna = 4, pasture = 15, soybean = 39, other temp.crops = 41, per.crops = 36
+
+time_laps <- c(1985:2019)
+year=2019
+y <- which(time_laps==year)
+
+basin_select <- st_read(file.path(dir_data, "hydroshed", "basin_select.shp"))
+
+```
+
+## LOADING & MERGING files
+
+We filter and merge into dataframes landscape metrics output
+
+```{r }
+
+list_hydro <- list()
+
+j=0
+
+for (basin_id in basin_select$HYBAS_ID){
+  
+j =j+1
+
+    WD.tmp = list.files(path=dir_data, pattern = paste0("_",basin_id), full.names = TRUE)[1]
+    
+    list_hydro[[j]] <- get(load(file=file.path(WD.tmp, paste0("hydrometric_",basin_id,".RData")))) %>% mutate(annee=year, ID=basin_id) 
+
+}
+
+df_hydro <- do.call("rbind",list_hydro) 
+
+```
+
+## SETTING up table of hydrographic metrics
+
+It is set up in order to be directly used for boxplotting
+
+```{r }
+
+df_lsm_relatif <- get(load(file = file.path(dir_data, 'processed', paste0("df_lsm_relatif.RData")))) %>% rename(value=for.nat, ID=hybas_id)
+
+list_hydro2 <- list()
+
+for (basin_id in basin_select$HYBAS_ID){
+  j=j+1
+  
+  perc_past <- (df_lsm_relatif %>% filter(ID==basin_id))$past.rel
+  perc_crop <- (df_lsm_relatif %>% filter(ID==basin_id))$soy.rel
+  
+  if(perc_past>=60){
+    list_hydro2[[j]] <- df_hydro %>% filter(ID==basin_id) %>% mutate(maj='pasture')
+    }
+  
+  if(perc_crop>=60){
+    list_hydro2[[j]] <- df_hydro %>% filter(ID==basin_id) %>% mutate(maj='soybean')
+  }
+  
+}
+
+df_hydro2 <- do.call("rbind",list_hydro2) 
+save(df_hydro2, file=file.path(dir_plot, "df_hydro_cropast.RData"))
+
+```
+
+

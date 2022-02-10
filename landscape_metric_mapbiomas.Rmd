@@ -1,0 +1,178 @@
+---
+title: "Landscape metrics on Mapbiomas land use"
+output: html_document
+---
+
+We compute landscape metrics using the package "landscapemetrics", which saves results as a data frame. We are looping on basins, so at each run one data frame is built and saved in the specific basin folder. 
+Metrics are computed at basin level (1), spring buffer level (2, buffer size should be specified in 'parameters'), and stream riparian buffer level (3, buffer size as selected in 'parameters').
+
+## Directories
+
+```{r }
+
+if ((Sys.info()["nodename"]) == "COP026") {
+  dir_data <- "C:/Users/arvor_d/Documents/workwork/data"
+  dir_plot <- "C:/Users/arvor_d/Documents/workwork/plot"
+} else if ((Sys.info()["nodename"]) == "COSTELSV6") {
+  dir_data <- "F:/kamir_e/$data"
+  dir_plot <- "F:/kamir_e/$plot"
+}
+
+```
+
+## Library
+
+```{r }
+
+library(plyr)
+library(tidyverse)
+library(tidyr)
+library(dplyr)
+library(foreach)
+library(doParallel)
+library(maps)
+library(landscapemetrics)
+library(sf)
+library(terra)
+
+```
+
+## Parameters
+
+```{r }
+
+year <- 2019
+time_span <- c(1985:2019)
+y <- which(year==time_span)
+tampon <- 100 #100, 250, 500 reste a faire 250
+
+basin_select <- st_read(file.path(dir_data, "hydroshed", "basin_select.shp"))
+
+```
+
+## 1. Computing metrics on WHOLE BASIN
+
+```{r }
+
+tictoc::tic()
+
+  no_cores <- detectCores()
+  cl <- makeCluster(no_cores) # setting up number of cores
+  registerDoParallel(cl) # parallelizing on them
+  
+  foreach(basin_id=basin_select$HYBAS_ID, .packages=c('landscapemetrics', 'terra', 'raster')) %dopar%  { 
+
+  # directory
+  WD.tmp = list.files(path=dir_data, pattern = paste0("_",basin_id), full.names = TRUE)[1]
+
+  # loading landuse data
+  mapbiomas <- rast(file.path(WD.tmp, paste0("mapbiomas_", basin_id, ".tif")))
+  
+  #computing landscape metrics at basin scale (MapBiomas)
+  mapbiomas.basin.lsm = calculate_lsm(mapbiomas,level="class",metric = c("ca","pland","np"),directions =8)
+  
+  mapbiomas.basin.df = as.data.frame(mapbiomas.basin.lsm)
+
+  save(mapbiomas.basin.df, file = file.path(WD.tmp, paste0("mapbiomas_lsm_",basin_id,".RData")))
+
+}
+
+  stopCluster(cl)
+tictoc::toc()
+
+```
+
+## 2. Computing metrics on SPRING BUFFER
+
+We assess 3 buffer size: 100, 250, 500 meters
+
+```{r }
+
+tictoc::tic()
+
+  no_cores <- detectCores()
+  cl <- makeCluster(no_cores/2) # setting up number of cores
+  registerDoParallel(cl) # parallelizing on them
+  
+  foreach(basin_id=basin_select$HYBAS_ID, .packages=c('landscapemetrics', 'terra', 'raster', 'sf')) %dopar%  { 
+
+  # directory
+  WD.tmp = list.files(path=dir_data, pattern = paste0("_",basin_id), full.names = TRUE)[1]
+  
+  # loading landuse data
+  mapbiomas <- rast(file.path(WD.tmp, paste0("mapbiomas_", basin_id, ".tif")))
+  nascente <- st_read(file.path(WD.tmp,paste0("nascente_",basin_id,".shp"))) 
+  
+  if(nrow(nascente)>0){
+    
+    nascente.buf = st_buffer(nascente, dist = tampon)
+    nascente.buf.uni = st_union(nascente.buf)
+    mapbiomas_buf = terra::mask(mapbiomas,vect(nascente.buf.uni))
+  
+    #computing landscape metrics at basin scale (MapBiomas)
+    mapbiomas.basin.lsm = calculate_lsm(mapbiomas_buf,level="class",metric = c("ca","pland","np"),directions =8)
+    
+    mapbiomas.basin.df = as.data.frame(mapbiomas.basin.lsm)
+    
+  }
+  
+  else {mapbiomas.basin.df <- "nonascente"}
+  
+  save(mapbiomas.basin.df, file = file.path(WD.tmp, paste0("mapbiomas_lsm_buf",tampon, "_",basin_id,".RData")))
+
+}
+
+  stopCluster(cl)
+tictoc::toc()
+
+```
+
+## Computing metrics on STREAM RIPARIAN BUFFER
+
+We assess 3 buffer size: 100, 250, 500 meters
+Warning: errors on around 10 basins where streams files are wrong.
+
+```{r }
+
+j=0
+
+tictoc::tic()
+
+  no_cores <- detectCores()
+  cl <- makeCluster(no_cores) # setting up number of cores
+  registerDoParallel(cl) # parallelizing on them
+  
+foreach(basin_id=basin_select$HYBAS_ID, .packages=c('landscapemetrics', 'terra', 'raster', 'sf')) %dopar%  { 
+
+  j=j+1
+  # directory
+  WD.tmp = list.files(path=dir_data, pattern = paste0("_",basin_id), full.names = TRUE)[1]
+  
+  # loading landuse data
+  mapbiomas <- rast(file.path(WD.tmp, paste0("mapbiomas_", basin_id, ".tif")))
+  rios <- st_read(file.path(WD.tmp,paste0("riossimple_",basin_id,".shp"))) 
+  
+  error_test <- tryCatch(expr=st_buffer(rios, dist = tampon), error = function(e) {an.error.occured <<- FALSE}, silent=TRUE) 
+  
+  if(class(error_test)[1]=='sf' & nrow(rios)>0){
+    
+    rios.buf = st_buffer(rios, dist = tampon)
+    rios.buf.union = st_union(rios.buf)
+    mapbiomas_buf = terra::mask(mapbiomas,vect(rios.buf.union))
+    
+    #computing landscape metrics at basin scale (MapBiomas)
+    mapbiomas.basin.lsm = calculate_lsm(mapbiomas_buf,level="class",metric = c("ca","pland","np"),directions =8)
+      
+    mapbiomas.basin.df = as.data.frame(mapbiomas.basin.lsm)
+      
+  
+  } else {mapbiomas.basin.df <- "rios_error"}
+  
+  save(mapbiomas.basin.df, file = file.path(WD.tmp, paste0("lsm_rip",tampon, "_",basin_id,".RData")))
+
+}
+
+  stopCluster(cl)
+tictoc::toc()
+
+```

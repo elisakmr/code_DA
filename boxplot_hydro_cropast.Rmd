@@ -1,7 +1,12 @@
 ---
-title: "Boxplot hydrologic metrics"
+title: "Boxplot of hydrographic metrics"
 output: html_document
 ---
+
+We plot hydrographic metrics (d.rios = stream density, d.nascente = spring density, d.reserv = reservoir density) sumarized in "lsm_sumup_hydro" code.
+Crop / pasture distinction for each basin is based on their area percentage related to the deforested area.
+
+## Directories
 
 ```{r }
 
@@ -23,14 +28,11 @@ library(plyr)
 library(tidyverse)
 library(tidyr)
 library(dplyr)
-library(maps)
 library(ggplot2)
 library(sp)
 library(rgdal)
-library(raster)
 library(ggmap)
 library(sf)
-library(viridis)
 
 ```
 
@@ -48,78 +50,36 @@ basin_select <- st_read(file.path(dir_data, "hydroshed", "basin_select.shp"))
 
 ```
 
-## LOADING & MERGING files
-
+## LOADING dataset
 
 ```{r }
 
-list_hydro <- list()
-
-i=0
-
-for (basin_id in basin_select$HYBAS_ID){
-  
-    i=i+1
-    
-
-    WD.tmp = list.files(path=dir_data, pattern = paste0("_",basin_id), full.names = TRUE)[1]
-
-    list_hydro[[i]] <- get(load(file=file.path(WD.tmp, paste0("hydrometric_",basin_id,".RData"))))
-    
-    list_hydro[[i]]$maj <- NA
-    
-    df_lsm <- get(load(file=file.path(WD.tmp, paste0("mapbiomas_lsm_",basin_id,".RData")))) %>% mutate(ID=basin_id) 
-    
-    perc_past <- (df_lsm %>% filter(ID==basin_id, class==15, metric=='pland', layer==y))$value
-    perc_crop <- (df_lsm %>% filter(ID==basin_id, class==39, metric=='pland', layer==y))$value 
-    
-    if(is_empty(perc_past)){perc_past=0}
-    
-    if(is_empty(perc_crop)){perc_crop=0}
-    
-    #if(perc_crop!=0|perc_past!=0){
-      
-        if(perc_past>=50){
-        
-        list_hydro[[i]]$maj <- 'pasture'
-      }
-    
-      if(perc_crop>=50){
-        
-        list_hydro[[i]]$maj <- 'soybean'
-      }
-
-    #}
-  
-    
-    
-
-}
-
-df_hydro <- do.call("rbind",list_hydro) %>% drop_na()
-
-dim(df_hydro)
+# lsm on nascente buffer
+df_hydro <- get(load(file=file.path(dir_plot, paste0("df_hydro_cropast.RData"))))
 
 ```
 
+
 ## Statistical tests
 
-Importance de la taille de l'échantillon: pvalue inf 5% sur petit échantillon est plus significatif que pvalue sup 5%
+Great importance of sample size: on small sample pvalue inf 5% (rejecting hypothesis) is strong
+
+!!Warning!! metric of interest (d.rios, d.reserv, or d.nascente) should be manually set.
 
 ```{r }
 
-df_crop_hydro <- df_hydro %>% filter(maj=='soybean') %>% dplyr::select(d.rios)
-df_past_hydro <- df_hydro %>% filter(maj=='pasture') %>% dplyr::select(d.rios)
+df_crop_hydro <- df_hydro %>% filter(maj=='soybean') %>% dplyr::select(d.rios) # set metric
+df_past_hydro <- df_hydro %>% filter(maj=='pasture') %>% dplyr::select(d.rios) # set metric
 
 # 1. Normality: h0: population suit loi normale. rejetée si pvalue inf à 5%
 shapiro.test(unlist(df_crop_hydro))
 shapiro.test(unlist(df_past_hydro))
 
 ggplot(df_hydro %>% filter(maj=='soybean'))+
-  geom_histogram(aes(x=d.rios))
+  geom_histogram(aes(x=d.rios)) # set metric
 
 ggplot(df_hydro %>% filter(maj=='pasture'))+
-  geom_histogram(aes(x=d.rios))
+  geom_histogram(aes(x=d.rios)) # set metric
 
 
 # 2. Wilcoxon: distributions: h0: meme loi, si pvalue inf à 5% rejetée 
@@ -129,21 +89,21 @@ wilcox.test(unlist(df_past_hydro), unlist(df_crop_hydro))
 
 ## BOXPLOTTING
 
-We compute boxplots of % of lost forest, for the two main agriculture types: pasture or crops
+!!Warning!! metric of interest (d.rios, d.reserv, or d.nascente) should be manually set.
 
 ```{r }
 
 
 ggplot(df_hydro) + 
-  geom_boxplot(aes(x=factor(maj),y=d.rios, group=maj, fill=factor(maj)), show.legend = FALSE, alpha=0.2) +
-  scale_y_continuous(limits = quantile(df_hydro$d.rios, c(0.1, 0.9)))+ 
-  labs(title = paste0("d.rios per hydrobasin"), x="", y="")+ 
+  geom_boxplot(aes(x=factor(maj),y=d.nascente, group=maj, fill=factor(maj)), show.legend = FALSE, alpha=0.2) + # set metric
+  scale_y_continuous(limits = quantile(df_hydro$d.nascente, c(0.1, 0.9)))+ # set metric
+  labs(title = paste0("d.nascente per hydrobasin"), x="", y="") + # set metric
   theme_bw()+
   theme(axis.text.x = element_text(size = 12), axis.title.x = element_text(size = 10, vjust = 1.5, hjust=1),
         axis.text.y = element_text(size = 12), axis.title.y = element_text(size = 10, angle = 0, vjust=1.05),
         plot.title = element_text(size = 10, face = "bold", hjust=0.5))
 
-ggsave(file.path(dir_plot, paste0("d.rios.boxplot.pdf")), dpi = 300)
+ggsave(file.path(dir_plot, paste0("d.nascente.boxplot.pdf")), dpi = 300) # set metric
 
 ```
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

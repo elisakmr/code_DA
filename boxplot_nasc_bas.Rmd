@@ -1,0 +1,177 @@
+---
+title: "Boxplot nascente vs basin"
+output: html_document
+---
+
+We plot forested areas at basin and riparian levels, summarized in "lsm_sumup_nasc" code.
+Crop / pasture distinction for each basin is based on their total area percentage at basin level.
+
+```{r }
+
+if ((Sys.info()["nodename"]) == "COP026") {
+  dir_data <- "C:/Users/arvor_d/Documents/workwork/data"
+  dir_plot <- "C:/Users/arvor_d/Documents/workwork/plot"
+} else if ((Sys.info()["nodename"]) == "COSTELSV6") {
+  dir_data <- "F:/kamir_e/$data"
+  dir_plot <- "F:/kamir_e/$plot"
+}
+
+```
+
+## Library
+
+```{r }
+
+library(plyr)
+library(tidyverse)
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+library(ggmap)
+library(sf)
+
+```
+
+## PARAMETERS
+
+```{r }
+
+# foret = 3, savanna = 4, pasture = 15, soybean = 39, other temp.crops = 41, per.crops = 36
+
+time_laps <- c(1985:2019)
+year=2019
+y <- which(time_laps==year)
+tampon=100
+
+basin_select <- st_read(file.path(dir_data, "hydroshed", "basin_select.shp"))
+
+```
+
+## LOADING datasets
+
+
+```{r }
+
+# lsm on whole basin
+df_basin_foret <- get(load(file=file.path(dir_plot, paste0("df_basin_foret4nasc_",tampon,".RData"))))
+
+# lsm on nascente buffer
+df_nasc_foret <- get(load(file=file.path(dir_plot, paste0("df_nasc_foret_", tampon, ".RData"))))
+
+```
+
+## Whole basin statistical tests
+
+Importance de la taille de l'échantillon: pvalue inf 5% sur petit échantillon est plus significatif que pvalue sup 5%
+
+```{r }
+
+df_crop_bas <- df_basin_foret %>% filter(maj=='soybean') %>% dplyr::select(value)
+df_past_bas <- df_basin_foret %>% filter(maj=='pasture') %>% dplyr::select(value)
+
+# 1. Normality
+
+ggplot(df_basin_foret %>% filter(maj=='soybean'))+
+  geom_histogram(aes(x=value))
+
+ggplot(df_basin_foret %>% filter(maj=='pasture'))+
+  geom_histogram(aes(x=value))
+
+shapiro.test(unlist(df_crop_bas))
+shapiro.test(unlist(df_past_bas))
+
+dim(df_crop_bas) # 158 obs
+dim(df_past_bas) # 185 obs
+
+# 2. Test Student (moyenne)
+
+t.test(unlist(df_past_bas), unlist(df_crop_bas))
+
+# 2. Test Wilcoxon (distribution)
+
+wilcox.test(unlist(df_past_bas), unlist(df_crop_bas))
+
+
+
+```
+## Nascente buffer statistical tests
+
+Importance de la taille de l'échantillon: pvalue inf 5% sur petit échantillon est plus significatif que pvalue sup 5%
+
+```{r }
+
+df_crop_nasc <- df_nasc_foret %>% filter(maj=='soybean') %>% dplyr::select(value)
+df_past_nasc <- df_nasc_foret %>% filter(maj=='pasture') %>% dplyr::select(value)
+
+# 1. Normality
+
+ggplot(df_nasc_foret %>% filter(maj=='soybean'))+
+  geom_histogram(aes(x=value))
+
+ggplot(df_nasc_foret %>% filter(maj=='pasture'))+
+  geom_histogram(aes(x=value))
+
+shapiro.test(unlist(df_crop_nasc))
+shapiro.test(unlist(df_past_nasc))
+
+dim(df_crop_nasc) # 158 obs
+dim(df_past_nasc) # 185 obs
+
+# 2. Test Student (moyenne)
+
+t.test(unlist(df_past_nasc), unlist(df_crop_nasc))
+
+# 2. Test Wilcoxon (distribution)
+
+wilcox.test(unlist(df_past_nasc), unlist(df_crop_nasc))
+
+
+
+```
+
+## BOXPLOTTING
+
+
+```{r }
+
+# building df
+df_bv <- df_basin_foret %>% mutate(scale='basin')
+df_rv <- df_nasc_foret %>% mutate(scale='spring buffer')
+ 
+df_tot <- rbind(df_bv, df_rv) %>% dplyr::rename('farming.type'='maj')
+
+# plotting
+ggplot(df_tot,aes(factor(scale, levels=c('basin','spring buffer')), value) ) + 
+  geom_boxplot(aes(col=farming.type), show.legend = TRUE, alpha=1.2) +
+  scale_y_continuous()+
+  #scale_color_manual(values=c("#FF9999", "blue2"))+
+  scale_color_brewer(palette="Dark2")+
+  labs(x="", y="% forested area")+ 
+  theme_bw()+
+  theme(axis.text.y = element_text(size = 10), axis.title.y = element_text(size = 10,  vjust=0.99), axis.ticks.x = element_blank())
+
+ggsave(file.path(dir_plot, paste0(year, "_nascente_basin_buf",tampon,".boxplot.pdf")), dpi = 300)
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

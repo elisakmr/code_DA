@@ -1,0 +1,96 @@
+---
+title: "Discriminating crops and pastures"
+output: html_document
+---
+
+We plot pasture percentage vs soybean percentage, at deforested level for each basin.
+We build the shapefile of these summarized data as well.
+
+```{r }
+
+if ((Sys.info()["nodename"]) == "COP026") {
+  dir_data <- "C:/Users/arvor_d/Documents/workwork/data"
+  dir_plot <- "C:/Users/arvor_d/Documents/workwork/plot"
+} else if ((Sys.info()["nodename"]) == "COSTELSV6") {
+  dir_data <- "F:/kamir_e/$data"
+  dir_plot <- "F:/kamir_e/$plot"
+}
+
+```
+
+## Library
+
+```{r }
+
+library(plyr)
+library(tidyverse)
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+library(ggmap)
+library(sf)
+
+```
+
+## PARAMETERS
+
+```{r }
+
+# foret = 3, savanna = 4, pasture = 15, soybean = 39, other temp.crops = 41, per.crops = 36
+
+year = 2019
+
+basin_select <- st_read(file.path(dir_data, "hydroshed", "basin_select.shp"))
+
+```
+
+## LOADING dataset
+
+```{r }
+
+df_lsm_relatif <- get(load(file = file.path(dir_data, 'processed', paste0("df_lsm_relatif.RData"))))
+
+```
+
+## PLOTTING
+
+```{r }
+
+ggplot(df_lsm_relatif) + 
+  geom_point(aes(x=past.rel,y=soy.rel), show.legend = FALSE, alpha=0.2) +
+  geom_hline(yintercept = 60, col='red')+
+  geom_hline(yintercept = 40, col='blue')+
+  geom_vline(xintercept = 60, col='red')+
+  geom_vline(xintercept = 40, col='blue')+
+  #scale_y_continuous(limits = c(0,10))+ 
+  labs(x="rel % pasture", y="rel % soybean")+ 
+  theme_light()+
+  theme(axis.text.x = element_text(size = 12), axis.title.x = element_text(size = 10, vjust = 1.5, hjust=1),
+        axis.text.y = element_text(size = 12), axis.title.y = element_text(size = 10, angle = 0, vjust=0.99))
+
+
+ggsave(file.path(dir_plot, paste0(year,"rel_soy_vs_past.boxplot.pdf")), dpi = 300)
+
+```
+
+## BUILDING SHAPEFILE
+
+
+```{r }
+
+basin_cropast <- basin_select  
+
+
+for (i in df_lsm_relatif$hybas_id){
+  basin_cropast[which(i==basin_cropast$HYBAS_ID),'past.rel']<-df_lsm_relatif[which(i==df_lsm_relatif$hybas_id),]$past.rel
+  basin_cropast[which(i==basin_cropast$HYBAS_ID),'soy.rel']<-df_lsm_relatif[which(i==df_lsm_relatif$hybas_id),]$soy.rel
+}
+
+st_write(basin_cropast, file.path(dir_data, "results_shp", "basin_cropast_rel.shp"), delete_layer = TRUE)
+
+```
+
+
+
+
+

@@ -1,0 +1,133 @@
+---
+title: "Summarizing lsm for nascente level analysis"
+output: html_document
+---
+
+We summarize landscape metrics at basin and spring buffer levels in two data frames "ggplot ready". Each of the 2 data frame gathers forest percentages in 2019 (at basin and spring level) of all basins that are either soybean or pasture specialized. The latest is set when soybean or pasture area percentage exceeds 50% of the whole watershed surface.
+
+```{r }
+
+if ((Sys.info()["nodename"]) == "COP026") {
+  dir_data <- "C:/Users/arvor_d/Documents/workwork/data"
+  dir_plot <- "C:/Users/arvor_d/Documents/workwork/plot"
+} else if ((Sys.info()["nodename"]) == "COSTELSV6") {
+  dir_data <- "F:/kamir_e/$data"
+  dir_plot <- "F:/kamir_e/$plot"
+}
+
+```
+
+## Library
+
+```{r }
+
+library(plyr)
+library(tidyverse)
+library(tidyr)
+library(dplyr)
+library(maps)
+library(ggplot2)
+library(ggmap)
+library(sf)
+library(viridis)
+
+```
+
+## PARAMETERS
+
+```{r }
+
+# foret = 3, savanna = 4, pasture = 15, soybean = 39, other temp.crops = 41, per.crops = 36
+
+time_laps <- c(1985:2019)
+year=2019
+y <- which(time_laps==year)
+tampon = 100
+
+basin_select <- st_read(file.path(dir_data, "hydroshed", "basin_select.shp"))
+
+```
+
+## LOADING & MERGING files
+
+We filter and merge into dataframes landscape metrics output
+
+```{r }
+
+list_basin <- list()
+list_nasc <- list()
+
+j=0
+
+for (basin_id in basin_select$HYBAS_ID){
+  
+j =j+1
+
+    WD.tmp = list.files(path=dir_data, pattern = paste0("_",basin_id), full.names = TRUE)[1]
+    
+    list_nasc[[j]] <- get(load(file=file.path(WD.tmp, paste0("mapbiomas_lsm_buf",tampon,"_",basin_id,".RData"))))
+    
+    if(list_nasc[[j]]=="nonascente"){
+      list_nasc[[j]] <- NA
+      list_basin[[j]] <- NA
+    }
+    
+    else {list_basin[[j]] <- get(load(file=file.path(WD.tmp, paste0("mapbiomas_lsm_",basin_id,".RData")))) %>% mutate(annee=year, ID=basin_id)
+    list_nasc[[j]] <- list_nasc[[j]] %>% dplyr::select(-id) %>% mutate(annee=year, ID=basin_id) }
+    
+
+}
+
+df_basin <- do.call("rbind",list_basin) %>% filter(layer==y)
+df_nasc <- do.call("rbind",list_nasc) %>% filter(layer==y)
+
+```
+
+## SETTING up table of forested area table
+
+It is set up in order to be directly used for boxplotting
+
+
+```{r }
+
+# whole basin forestd area
+list_forest_basin <- list()
+
+# forested area around nascentes
+list_forest_nasc <- list()
+
+j=0
+
+for (basin_id in basin_select$HYBAS_ID){
+  
+  perc_past <- (df_basin %>% filter(ID==basin_id, class==15, metric=='pland'))$value
+  perc_crop <- (df_basin %>% filter(ID==basin_id, class==39, metric=='pland'))$value 
+  
+  if(is_empty(perc_past)){perc_past=0}
+  if(is_empty(perc_crop)){perc_crop=0}
+  
+  if(perc_past>=50){
+    j=j+1
+    list_forest_basin[[j]] <- df_basin %>% filter(ID==basin_id, class == 3, metric=='pland') %>% mutate(maj='pasture')
+    list_forest_nasc[[j]] <- df_nasc %>% filter(ID==basin_id, class == 3, metric=='pland') %>% mutate(maj='pasture')
+    }
+  
+  if(perc_crop>=50){
+    j=j+1
+    list_forest_basin[[j]] <- df_basin %>% filter(ID==basin_id, class == 3, metric=='pland') %>% mutate(maj='soybean')
+    list_forest_nasc[[j]] <- df_nasc %>% filter(ID==basin_id, class == 3, metric=='pland') %>% mutate(maj='soybean')
+  }
+  
+}
+
+
+df_basin_foret <- do.call("rbind",list_forest_basin) %>% mutate(annee=year) %>% dplyr::select(-id)
+df_nasc_foret <- do.call("rbind",list_forest_nasc) %>% mutate(annee=year) 
+
+save(df_basin_foret, file=file.path(dir_plot, paste0("df_basin_foret4nasc_",tampon,".RData")))
+save(df_nasc_foret, file=file.path(dir_plot, paste0("df_nasc_foret_", tampon, ".RData")))
+
+
+```
+
+

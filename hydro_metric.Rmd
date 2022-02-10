@@ -12,7 +12,7 @@ if ((Sys.info()["nodename"]) == "COP026") {
   dir_plot <- "C:/Users/arvor_d/Documents/workwork/plot"
 } else if ((Sys.info()["nodename"]) == "COSTELSV6") {
   dir_data <- "F:/kamir_e/$data"
-  dir_plot <- "F:/kamir_e/$plot "
+  dir_plot <- "F:/kamir_e/$plot"
 }
 
 ```
@@ -28,11 +28,6 @@ library(dplyr)
 library(foreach)
 library(parallel)
 library(doParallel)
-library(maps)
-library(landscapemetrics)
-library(sp)
-library(rgdal)
-library(raster)
 library(sf)
 library(terra)
 
@@ -42,8 +37,8 @@ library(terra)
 
 ```{r }
 
-# loading hydrobasin
-hydrobasin <- st_read(file.path(dir_data, "hydroshed", "subbas_3bas.shp"))
+# loading pre selected basins
+basin_select <- st_read(file.path(dir_data, "hydroshed", "basin_select.shp"))
 
 tictoc::tic()
 
@@ -51,29 +46,28 @@ tictoc::tic()
   cl <- makeCluster(no_cores/2) # setting up number of cores
   registerDoParallel(cl) # parallelizing on them
   
-  foreach(i=c(1:2031), .packages=c('sf', 'terra', 'raster')) %dopar%  { 
+  foreach(basin_id=basin_select$HYBAS_ID, .packages=c('sf', 'terra', 'raster')) %dopar%  { 
 
     # directory
-    WD.tmp = list.files(path=dir_data, pattern = paste0("Basin_",i,"_"), full.names = TRUE)
+    WD.tmp = list.files(path=dir_data, pattern = paste0("_",basin_id), full.names = TRUE)[1]
     
+    ligne <- which(basin_id==basin_select$HYBAS_ID)
 
     # loading hydrologic data
-    nascente <- st_read(file.path(WD.tmp, paste0("nascente_",i,".shp")))
-    reserv <- st_read(file.path(WD.tmp, paste0("reserv_",i,".shp")))
-    rios.simple <- st_read(file.path(WD.tmp, paste0("riossimple_",i,".shp")))
-    poly.id=i
-    surface <- st_area(hydrobasin[i,])
+    nascente <- st_read(file.path(WD.tmp, paste0("nascente_",basin_id,".shp")))
+    reserv <- st_read(file.path(WD.tmp, paste0("reserv_",basin_id,".shp")))
+    rios.simple <- st_read(file.path(WD.tmp, paste0("riossimple_",basin_id,".shp")))
+    surface <- st_area(basin_select[ligne,])
       
     d.nascente <- as.numeric(dim(nascente)[1]/surface)
     d.reserv <- as.numeric(dim(reserv)[1]/surface)
     d.rios <- as.numeric(sum(st_length(rios.simple))/surface)
     
-    df <- data.frame(poly.id, d.nascente, d.reserv, d.rios)
+    df <- data.frame(basin_id, d.nascente, d.reserv, d.rios)
     
-    save(df, file = file.path(WD.tmp, paste0("hydrometric_",i,".RData")))
+    save(df, file = file.path(WD.tmp, paste0("hydrometric_",basin_id,".RData")))
 
   }
-
 
 ```
 

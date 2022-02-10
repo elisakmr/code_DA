@@ -3,6 +3,11 @@ title: "Basin of interest"
 output: html_document
 ---
 
+We select the sub-basins belonging to one of the three following basins:
+- Juruena
+- Teles Pires
+- Xingu
+
 ## Directories
 
 ```{r }
@@ -25,15 +30,12 @@ library(plyr)
 library(tidyverse)
 library(tidyr)
 library(dplyr)
-library(ggplot2)
 library(rgdal)
-library(raster)
 library(sf)
 library(stars)
 library(terra)
 
 ```
-
 
 ## Loading and reprojecting basin files
 
@@ -62,12 +64,11 @@ st_write(telespires.valid, file.path(dir_data, "boundaries", "teles.shp"), delet
 st_write(juruenc.valid, file.path(dir_data, "boundaries", "juruena.shp"), delete_layer = TRUE)
 st_write(xingu_valid, file.path(dir_data, "boundaries", "xingu.shp"), delete_layer = TRUE)
 
-
 ```
 
-## Selecting sub-basin of interest
+## Selecting sub-basins
 
-Intersection between hydrobasin from hydroshed and shapes of the basins selected
+Intersection between hydrobasin from hydroshed and shapes of the 3 basins of interest
 
 ```{r }
 
@@ -91,16 +92,9 @@ juru_buf<-st_buffer(juruenc.valid, dist = 7000)
 int.list <- st_contains(juru_buf, hydrobasin)
 hydrobas_juruenc <- hydrobasin[unlist(int.list),] %>% mutate(basin='juruena')
 
-
-# plot(juru_buf$geometry)
-# plot(juruenc.valid$geometry, add=TRUE)
-# plot(hydrobas_juruenc$geometry, add=TRUE)
-# plot(mt_borders$geometry, add=TRUE)
-
-
 basin_int <- rbind(hydrobas_xingu, hydrobas_telespires, hydrobas_juruenc)
 
-# ajustement: some basins have to be added/remove manually
+# ajustement: some basins have to be added/removed manually, because they are on one basin's borders
 ad_xingu <- which(hydrobasin$HYBAS_ID==6090529250) 
 ad_juruena <- which(hydrobasin$HYBAS_ID==6090420970)
 basin_int2 <- rbind(basin_int, hydrobasin[ad_xingu,] %>% mutate(basin='xingu'))
@@ -110,7 +104,6 @@ basin_interest <- basin_int4[-20,]
 
 # writing final shapefile
 st_write(basin_interest[!duplicated(basin_interest$HYBAS_ID),], file.path(dir_data, "hydroshed", "basin_select.shp"), delete_layer = TRUE)
-
 
 ```
 

@@ -1,0 +1,45 @@
+---
+title: "function"
+output: html_document
+---
+
+We build a function setting up basin specific folders. Code should be run once only.
+
+## Directories
+
+```{r }
+
+if ((Sys.info()["nodename"]) == "COP026") {
+  dir_data <- "C:/Users/arvor_d/Documents/workwork/data"
+  dir_plot <- "C:/Users/arvor_d/Documents/workwork/plot"
+} else if ((Sys.info()["nodename"]) == "COSTELSV6") {
+  dir_data <- "F:/kamir_e/$data"
+  dir_plot <- "F:/kamir_e/$plot"
+}
+
+```
+
+## Function creating folders
+
+!!! Current folder names were created using a slightly different function.
+
+```{r }
+
+extractBasin = function(basin.sf){
+
+  ID.name = paste0("Basin_",basin.sf$HYBAS_ID)
+  #check if directory exist
+  if (!file.exists(ID.name)){
+    dir.create(file.path(dir_data, ID.name))
+    WD.new = paste(dir_data, ID.name,sep="/")
+  }
+
+}
+
+```
+
+
+
+
+
+

@@ -3,6 +3,8 @@ title: "file preparation"
 output: html_document
 ---
 
+We crop all data on each of the basin shape. There is land use data (MapBiomas and Modis), and hydrographic data (springs, single streams, polyline streams, and reservoirs).
+
 ## Directories
 
 ```{r }
@@ -12,7 +14,7 @@ if ((Sys.info()["nodename"]) == "COP026") {
   dir_plot <- "C:/Users/arvor_d/Documents/workwork/plot"
 } else if ((Sys.info()["nodename"]) == "COSTELSV6") {
   dir_data <- "F:/kamir_e/$data"
-  dir_plot <- "F:/kamir_e/$plot "
+  dir_plot <- "F:/kamir_e/$plot"
 }
 
 ```
@@ -27,67 +29,48 @@ library(tidyr)
 library(dplyr)
 library(foreach)
 library(iterators)
-library(lwgeom)
 library(parallel)
 library(doParallel)
 library(maps)
-library(nnet)
-library(ggplot2)
-library(latticeExtra)
-library(sp)
-library(rgdal)
-library(raster)
-library(stringi)
 library(ggmap)
 library(sf)
-library(stars)
 library(terra)
 
 ```
 
 
-## Setting up basin files TBRUN once only!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+## Loading selected sub basin files 
 
 ```{r }
 
-hydrobasin <- st_read(file.path(dir_data, "hydroshed", "subbas_3bas.shp"))
-
-for (i in 1:2031){
-  extractBasin(i, hydrobasin[i,])
-}
+basin_select <- st_read(file.path(dir_data, "hydroshed", "basin_select.shp"))
 
 ```
 
 ## MAPBIOMAS cropping
-
-1988
-
 
 ```{r }
 
 # Mapbiomas raster for whole MT
 mapbiomas_full <- rast(file.path(dir_data, "mapbiomas", "biomas1985_2019_mg.tif"))
 
-# Hydroshed hydrobasins at level 9
-hydrobasin <- st_read(file.path(dir_data, "hydroshed", "subbas_3bas.shp"))
-
 # Cropping
 tictoc::tic()
 
-for (i in 1:2031){
+for (basin_id in basin_select$HYBAS_ID){
  
-  mapbiomas_crop <- terra::crop(mapbiomas_full,hydrobasin[i,])
-  mapbiomas_mask <- terra::mask(mapbiomas_crop,vect(hydrobasin[i,]))
+  ligne <- which(basin_id==basin_select$HYBAS_ID)
+  mapbiomas_crop <- terra::crop(mapbiomas_full,basin_select[ligne,])
+  mapbiomas_mask <- terra::mask(mapbiomas_crop,vect(basin_select[ligne,]))
   mapbiomas_mask_utm <- terra::project(mapbiomas_mask,"+init=epsg:32721",method="ngb")
 
-  WD.tmp = list.files(path=dir_data, pattern = paste0("Basin_",i,"_"), full.names = TRUE)
+  WD.tmp = list.files(path=dir_data, pattern = paste0("_",basin_id), full.names = TRUE)[1]
 
-  terra::writeRaster(mapbiomas_mask_utm, file.path(WD.tmp, paste0("mapbiomas_", i, ".tif")), overwrite = TRUE)
+  terra::writeRaster(mapbiomas_mask_utm, file.path(WD.tmp, paste0("mapbiomas_", basin_id, ".tif")), overwrite = TRUE)
 
     }
 
 tictoc::toc() 
-
 
 ```
 
@@ -98,21 +81,24 @@ tictoc::toc()
 # MODIS raster for whole MT
 modis_full <- rast(file.path(dir_data, "pangaea", "panga_braz84_mt.tif"))
 
-# Hydroshed hydrobasins at level 9
-hydrobasin <- st_read(file.path(dir_data, "hydroshed", "subbas_3bas.shp"))
-
 # Cropping
-for (i in 1:10){
+tictoc::tic()
+
+for (basin_id in basin_select$HYBAS_ID){
   
-  modis_crop <- terra::crop(modis_full,hydrobasin[i,])
-  modis_mask <- terra::mask(modis_crop,vect(hydrobasin[i,]))
+  ligne <- which(basin_id==basin_select$HYBAS_ID)
+  
+  modis_crop <- terra::crop(modis_full,basin_select[ligne,])
+  modis_mask <- terra::mask(modis_crop,vect(basin_select[ligne,]))
   modis_mask_utm <- terra::project(modis_mask,"+init=epsg:32721",method="ngb")
 
-  WD.tmp = list.files(path=dir_data, pattern = paste0("Basin_",i,"_"), full.names = TRUE)
+  WD.tmp = list.files(path=dir_data, pattern = paste0("_",basin_id), full.names = TRUE)[1]
 
-  terra::writeRaster(modis_mask_utm, file.path(WD.tmp, paste0("modis_", i, ".tif")), overwrite = TRUE)
+  terra::writeRaster(modis_mask_utm, file.path(WD.tmp, paste0("modis_", basin_id, ".tif")), overwrite = TRUE)
 
 }
+
+tictoc::tic()
 
 ```
 
@@ -122,74 +108,68 @@ for (i in 1:10){
 
 ```{r }
 
-# MODIS raster for whole MT
-hydronetwork <- st_read(file.path(dir_data, "water_surface", "rios_simples", "rios_simple84.shp"))
-
-# Hydroshed hydrobasins at level 9
-hydrobasin <- st_read(file.path(dir_data, "hydroshed", "subbas_3bas.shp"))
-
+rios <- st_read(file.path(dir_data, "water_surface", "rios_simples", "rios_simple84.shp"))
 
 tictoc::tic()
+
   no_cores <- detectCores()
   cl <- makeCluster(no_cores-10) # setting up number of cores
   registerDoParallel(cl) # parallelizing on them
   
-  foreach(i=c(11:2031), .packages=c('sf')) %dopar%  { #
+  foreach(basin_id=basin_select$HYBAS_ID, .packages=c('sf')) %dopar%  { #
     
-    WD.tmp = list.files(path=dir_data, pattern = paste0("Basin_",i,"_"), full.names = TRUE)
-    
-    crop_list <- st_intersects(hydrobasin[i,],hydronetwork)
+    ligne <- which(basin_id==basin_select$HYBAS_ID)
+
+    crop_list <- st_intersects(basin_select[ligne,],rios)
     crop_shp <- hydronetwork[unlist(crop_list),]
     crop.utm <- st_transform(crop_shp, crs="EPSG:32721") 
+    
+    WD.tmp = list.files(path=dir_data, pattern = paste0("_",basin_id), full.names = TRUE)[1]
 
-    st_write(crop.utm, file.path(WD.tmp, paste0("riossimple_",i,".shp")), delete_layer = TRUE)
+    st_write(crop.utm, file.path(WD.tmp, paste0("riossimple_",basin_id,".shp")), delete_layer = TRUE)
   
    }
   
   stopCluster(cl)
+  
 tictoc::toc() 
 
-
 ```
-
 
 ## Water surfaces cropping
 
 2. POLY RIOS 
 
+!!! There are invalid geometries. Error not solved.
+
 ```{r }
 
-# MODIS raster for whole MT
 polynetwork <- st_read(file.path(dir_data, "water_surface", "rios_poly", "output_hidro_poly.shp"))
-
-# Hydroshed hydrobasins at level 9
-hydrobasin <- st_read(file.path(dir_data, "hydroshed", "subbas_3bas.shp"))
-
 
 tictoc::tic()
   no_cores <- detectCores()
   cl <- makeCluster(no_cores) # setting up number of cores
   registerDoParallel(cl) # parallelizing on them
   
-  foreach(i=c(1:2031), .packages=c('sf')) %dopar%  { #
+  foreach(basin_id=basin_select$HYBAS_ID, .packages=c('sf')) %dopar%  { #
     
-    WD.tmp = list.files(path=dir_data, pattern = paste0("Basin_",i,"_"), full.names = TRUE)
+    ligne <- which(basin_id==basin_select$HYBAS_ID)
     
-    if(polynetwork[i,]!=0){
+    #if(polynetwork[ligne,]!=0){
       
-      crop_list <- st_intersects(hydrobasin[i,],polynetwork)
+      crop_list <- st_intersects(basin_select[ligne,],polynetwork)
       crop_shp <- polynetwork[unlist(crop_list),]
       crop.utm <- st_transform(crop_shp, crs="EPSG:32721") 
+      
+      WD.tmp = list.files(path=dir_data, pattern = paste0("_",basin_id), full.names = TRUE)[1]
+      st_write(crop.utm, file.path(WD.tmp, paste0("riospoly_",basin_id,".shp")), delete_layer = TRUE)
 
-      st_write(crop.utm, file.path(WD.tmp, paste0("riospoly_",i,".shp")), delete_layer = TRUE)
-
-    }
+    #}
   
    }
   
   stopCluster(cl)
 tictoc::toc() 
-
 
 ```
 
@@ -200,35 +180,26 @@ tictoc::toc()
 
 ```{r }
 
-# MODIS raster for whole MT
 nascente <- st_read(file.path(dir_data, "water_surface", "nascentes", "nascente84.shp"))
-
-# Hydroshed hydrobasins at level 9
-hydrobasin <- st_read(file.path(dir_data, "hydroshed", "subbas_3bas.shp"))
-
 
 tictoc::tic()
   no_cores <- detectCores()
   cl <- makeCluster(no_cores) # setting up number of cores
   registerDoParallel(cl) # parallelizing on them
   
-  foreach(i=c(1:2031), .packages=c('sf')) %dopar%  { #
-    
-    WD.tmp = list.files(path=dir_data, pattern = paste0("Basin_",i,"_"), full.names = TRUE)
-
+  foreach(basin_id=basin_select$HYBAS_ID, .packages=c('sf')) %dopar%  { #
       
-      crop_list <- st_intersects(hydrobasin[i,],nascente)
+      crop_list <- st_intersects(basin_select[ligne,],nascente)
       crop_shp <- nascente[unlist(crop_list),]
       crop.utm <- st_transform(crop_shp, crs="EPSG:32721") 
 
-      st_write(crop.utm, file.path(WD.tmp, paste0("nascente_",i,".shp")), delete_layer = TRUE)
-
+      WD.tmp = list.files(path=dir_data, pattern = paste0("_",basin_id), full.names = TRUE)[1]
+      st_write(crop.utm, file.path(WD.tmp, paste0("nascente_",basin_id,".shp")), delete_layer = TRUE)
   
    }
   
   stopCluster(cl)
 tictoc::toc() 
-
 
 ```
 
@@ -238,34 +209,26 @@ tictoc::toc()
 
 ```{r }
 
-# MODIS raster for whole MT
 reserv <- st_read(file.path(dir_data, "water_surface", "lago", "input_lago_reservatorio_icv.shp"))
-
-# Hydroshed hydrobasins at level 9
-hydrobasin <- st_read(file.path(dir_data, "hydroshed", "subbas_3bas.shp"))
-
 
 tictoc::tic()
   no_cores <- detectCores()
   cl <- makeCluster(no_cores) # setting up number of cores
   registerDoParallel(cl) # parallelizing on them
   
-  foreach(i=c(1:2031), .packages=c('sf')) %dopar%  { #
-    
-    WD.tmp = list.files(path=dir_data, pattern = paste0("Basin_",i,"_"), full.names = TRUE)
-      
-      crop_list <- st_intersects(hydrobasin[i,],reserv)
+  foreach(basin_id=basin_select$HYBAS_ID, .packages=c('sf')) %dopar%  { #
+
+      crop_list <- st_intersects(basin_select[ligne,],reserv)
       crop_shp <- reserv[unlist(crop_list),]
       crop.utm <- st_transform(crop_shp, crs="EPSG:32721") 
     
-      st_write(crop.utm, file.path(WD.tmp, paste0("reserv_",i,".shp")), delete_layer = TRUE)
-
+      WD.tmp = list.files(path=dir_data, pattern = paste0("_",basin_id), full.names = TRUE)[1]
+      st_write(crop.utm, file.path(WD.tmp, paste0("reserv_",basin_id,".shp")), delete_layer = TRUE)
   
    }
   
   stopCluster(cl)
 tictoc::toc() 
-
 
 ```
 

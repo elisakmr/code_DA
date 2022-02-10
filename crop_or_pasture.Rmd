@@ -3,6 +3,9 @@ title: "Crop or pasture"
 output: html_document
 ---
 
+We plot pasture percentage vs soybean percentage, at basin level, for each basin.
+We build the shapefile of these summarized data as well.
+
 ```{r }
 
 if ((Sys.info()["nodename"]) == "COP026") {
@@ -10,7 +13,7 @@ if ((Sys.info()["nodename"]) == "COP026") {
   dir_plot <- "C:/Users/arvor_d/Documents/workwork/plot"
 } else if ((Sys.info()["nodename"]) == "COSTELSV6") {
   dir_data <- "F:/kamir_e/$data"
-  dir_plot <- "F:/kamir_e/$plot "
+  dir_plot <- "F:/kamir_e/$plot"
 }
 
 ```
@@ -25,12 +28,8 @@ library(tidyr)
 library(dplyr)
 library(maps)
 library(ggplot2)
-library(sp)
-library(rgdal)
-library(raster)
 library(ggmap)
 library(sf)
-library(viridis)
 
 ```
 
@@ -43,7 +42,6 @@ library(viridis)
 year = 2019
 
 basin_select <- st_read(file.path(dir_data, "hydroshed", "basin_select.shp"))
-
 
 ```
 
@@ -63,21 +61,14 @@ for (i in basin_select$HYBAS_ID){
     WD.tmp = list.files(path=dir_data, pattern = paste0("_",i), full.names = TRUE)[1]
 
     list_lsm[[j]] <- get(load(file=file.path(WD.tmp, paste0("mapbiomas_lsm_",i,".RData")))) %>% mutate(hybas_id=i) 
-    
  
 }
 
 df_lsm <- do.call("rbind",list_lsm) %>% filter(metric=='pland', class == 15|class == 39, layer==35) %>% dplyr::select(metric, hybas_id, class, value)  %>% spread(class, value) %>% dplyr::rename(pasture='15', soy='39') %>% mutate_all(~replace(., is.na(.), 0))
 
-
 df_lsm %>% filter(pasture>75)
-#Basin_955_6090499060!!!!! CHOSEN
-
-
 
 df_lsm %>% filter(soy>75)
-#Basin_1855_6090573160 75.9!!!!! CHOSEN
-
 
 ```
 
@@ -85,7 +76,6 @@ df_lsm %>% filter(soy>75)
 
 
 ```{r }
-
 
 ggplot(df_lsm) + 
   geom_point(aes(x=pasture,y=soy), show.legend = FALSE, alpha=0.2) +
@@ -98,14 +88,11 @@ ggplot(df_lsm) +
         axis.text.y = element_text(size = 12), axis.title.y = element_text(size = 10, angle = 0, vjust=0.99))
 
 
-
 ggsave(file.path(dir_plot, paste0(year,"soy_vs_past.boxplot.pdf")), dpi = 300)
-
 
 ```
 
 ## BUILDING SHAPEFILE
-
 
 ```{r }
 

@@ -118,3 +118,94 @@ ID.name = paste0("Basin_",i,"_",id)
   
   terra::writeRaster(mapbiomas_mask_utm, file.path(WD.tmp, paste0("mapbiomas_", 6090469940, ".tif")), overwrite = TRUE)
   
+  
+  basin_rios
+  df_bv
+  
+  for (i in df_bv$ID){
+    df_bv[which(i==df_bv$ID),'d.rios']<-basin_rios[which(i==basin_rios$HYBAS_ID),]$d.rios
+  }
+  
+  head(df_bv)
+
+  var(unlist(df_bv %>% filter(maj=='pasture') %>% dplyr::select(d.rios)  ))
+    
+  
+  var(unlist(df_bv %>% filter(maj=='soybean') %>% dplyr::select(value)  ))
+  mean(unlist(df_rv %>% filter(maj=='pasture') %>% dplyr::select(value)  ))
+  
+  df_rv
+
+  st_write(rios.buf,file.path(WD.tmp,paste0("riosbuf_",basin_id,".shp")))
+  terra::writeRaster(mapbiomas_buf[[35]], file.path(WD.tmp, paste0("mapbiomasbuf_", basin_id, ".tif")), overwrite = TRUE)
+
+  
+  for(basin_id in basin_select$HYBAS_ID[880:890])   { 
+    
+    # directory
+    WD.tmp = list.files(path=dir_data, pattern = paste0("_",basin_id), full.names = TRUE)[1]
+    
+    # loading landuse data
+    mapbiomas <- rast(file.path(WD.tmp, paste0("mapbiomas_", basin_id, ".tif")))
+    rios <- st_read(file.path(WD.tmp,paste0("riossimple_",basin_id,".shp"))) 
+    
+
+      rios.buf = st_buffer(rios, dist = tampon)
+      mapbiomas_buf = terra::mask(mapbiomas,vect(rios.buf))
+      
+      #computing landscape metrics at basin scale (MapBiomas)
+      mapbiomas.basin.lsm = calculate_lsm(mapbiomas_buf,level="class",metric = c("ca","pland","np"),directions =8)
+      
+      mapbiomas.basin.df = as.data.frame(mapbiomas.basin.lsm)
+      
+
+    save(mapbiomas.basin.df, file = file.path(WD.tmp, paste0("lsm_rip",tampon, "_",basin_id,".RData")))
+    
+  }
+  
+st_simplify(rios)
+l<-which(basin_id==hydrobasin$HYBAS_ID)
+crop_list <- st_intersects(hydrobasin[l,],hydronetwork)
+crop_shp <- hydronetwork[unlist(crop_list),]
+crop.utm <- st_transform(crop_shp, crs="EPSG:32721") 
+
+rios.buf = st_buffer(crop.utm[-633,], dist = tampon)
+length(st_is_valid(hydronetwork))
+st_write(crop.utm, file.path(WD.tmp, paste0("riossimple_",basin_id,".shp")), delete_layer = TRUE)
+
+
+#########################################   buffers to be plotted
+basin_id = 6090573160 # 6090499060
+WD.tmp = list.files(path=dir_data, pattern = paste0("_",basin_id), full.names = TRUE)[1]
+rios <- st_read(file.path(WD.tmp,paste0("riossimple_",basin_id,".shp"))) 
+rios.buf = st_buffer(rios, dist = 500)
+st_write(rios.buf, file.path(dir_data, 'processed', 'water', paste0("riosbuf_", basin_id,".shp")), delete_layer = TRUE)
+
+##############################################
+
+WD.tmp = list.files(path=dir_data, pattern = paste0("_",basin_id), full.names = TRUE)[1]
+
+# loading landuse data
+mapbiomas <- rast(file.path(WD.tmp, paste0("mapbiomas_", basin_id, ".tif")))
+rios <- st_read(file.path(WD.tmp,paste0("riossimple_",basin_id,".shp"))) 
+rios.buf = st_buffer(rios, dist = tampon)
+area1 <- sum(st_area(rios.buf))
+rios.buf.union <- st_union(rios.buf)
+area.uni <- st_area(rios.buf.union)
+plot(rios.buf)
+plot(rios.buf.union)
+st_write(rios.buf.union, file.path(dir_data, 'processed', 'water', paste0("riosbufuni_", basin_id,".shp")))
+mapbiomas_buf1 = terra::mask(mapbiomas,vect(rios.buf))
+mapbiomas_buf2 = terra::mask(mapbiomas,vect(rios.buf.union))
+plot(mapbiomas_buf1[[1]])
+plot(mapbiomas_buf2[[2]])
+
+############# crop past maximum ################
+
+max((df_lsm_relatif %>% filter(past.rel>60))$soy.rel)
+
+mean((df_basin_foret %>% filter(maj=='pasture'))$value)
+mean((df_rios_foret %>% filter(maj=='soybean'))$value)
+
+
+

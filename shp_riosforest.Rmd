@@ -1,5 +1,5 @@
 ---
-title: "Shapefile of % forest in source buffer"
+title: "Shapefile of % forests in riparian area"
 output: html_document
 ---
 
@@ -38,10 +38,7 @@ library(sf)
 time_laps <- c(1985:2019)
 year=2019
 y <- which(time_laps==year)
-
 tampon = 100
-
-basin_select <- st_read(file.path(dir_data, "hydroshed", "basin_select.shp"))
 
 ```
 
@@ -52,16 +49,16 @@ basin_select <- st_read(file.path(dir_data, "hydroshed", "basin_select.shp"))
 # Loading selected basins
 basin_select <- st_read(file.path(dir_data, "hydroshed", "basin_select.shp"))
 
-# Loading table of spring buffer forested percentage
-df_nasc_foret <- get(load(file=file.path(dir_plot, paste0("df_nasc_foret_", tampon, ".RData"))))
+# Loading table of riparian forested area
+df_rios_foret <- get(load(file=file.path(dir_plot, paste0("df_rios_foret_", tampon, ".RData"))))
 
 # Adding table info to shapefile of basins
 basin_db <- basin_select 
 
-for (i in df_nasc_foret$ID){
-  shp_nasc_foret[which(i==shp_nasc_foret$HYBAS_ID),'buf.foret']<-df_nasc_foret[which(i==df_nasc_foret$ID),]$value
+for (i in df_rios_foret$ID){
+  shp_rios_foret[which(i==shp_rios_foret$HYBAS_ID),'buf.foret']<-df_rios_foret[which(i==df_rios_foret$ID),]$value
 }
 
-st_write(shp_nasc_foret, file.path(dir_data, "results_shp", paste0("nascbuf_", tampon, "foret.shp")), delete_layer = TRUE)
+st_write(shp_rios_foret, file.path(dir_data, "results_shp", paste0("riosbuf_", tampon, "foret.shp")), delete_layer = TRUE)
 
 ```

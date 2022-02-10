@@ -1,0 +1,73 @@
+---
+title: "Buidling deforest relative landscape metrics"
+output: html_document
+---
+
+We convert landscape metrics from basin level into deforested area level.
+
+```{r }
+
+if ((Sys.info()["nodename"]) == "COP026") {
+  dir_data <- "C:/Users/arvor_d/Documents/workwork/data"
+  dir_plot <- "C:/Users/arvor_d/Documents/workwork/plot"
+} else if ((Sys.info()["nodename"]) == "COSTELSV6") {
+  dir_data <- "F:/kamir_e/$data"
+  dir_plot <- "F:/kamir_e/$plot"
+}
+
+```
+
+## Library
+
+```{r }
+
+library(plyr)
+library(tidyverse)
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+library(ggmap)
+library(sf)
+
+```
+
+## PARAMETERS
+
+```{r }
+
+# foret = 3, savanna = 4, pasture = 15, soybean = 39, other temp.crops = 41, per.crops = 36
+
+time_laps <- c(1985:2019)
+year=2019
+y <- which(time_laps==year)
+
+basin_select <- st_read(file.path(dir_data, "hydroshed", "basin_select.shp"))
+
+```
+
+## LOADING & MERGING files
+
+
+```{r }
+
+list_lsm <- list()
+
+j=0
+
+for (basin_id in basin_select$HYBAS_ID){
+    
+    j=j+1
+    
+    WD.tmp = list.files(path=dir_data, pattern = paste0("_",basin_id), full.names = TRUE)[1]
+
+    list_lsm[[j]] <- get(load(file=file.path(WD.tmp, paste0("mapbiomas_lsm_",basin_id,".RData")))) %>% mutate(hybas_id=basin_id) 
+    
+}
+
+df_lsm <- do.call("rbind",list_lsm) %>% filter(metric=='pland', class == 15|class == 39|class == 3|class == 4|class == 33|class == 31|class == 5, layer==y) %>% dplyr::select(metric, hybas_id, class, value)  %>% spread(class, value) %>% dplyr::rename(pasture='15', soy='39', for.nat='3', sav='4',riv='33') %>% mutate_all(~replace(., is.na(.), 0))
+
+df_lsm_relatif <- df_lsm %>% mutate(soy.rel=100*soy/(100-(for.nat+sav+riv)), past.rel=100*pasture/(100-(for.nat+sav+riv))) %>% mutate_all(~replace(., is.na(.), 0))
+
+save(df_lsm_relatif, file = file.path(dir_data, 'processed', paste0("df_lsm_relatif.RData")))
+
+```
